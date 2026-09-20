@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const cities=['新竹縣','新竹市','桃園市','苗栗縣','新北市','臺北市','臺中市','基隆市','宜蘭縣','彰化縣','南投縣','花蓮縣','雲林縣','嘉義市','嘉義縣','臺南市','臺東縣','高雄市','屏東縣','澎湖縣','金門縣','連江縣'];
   const ages=['18 歲以下','19-25 歲','26-35 歲','36-45 歲','46-55 歲','56-65 歲','65-75 歲','75 歲以上'];
-  let profile=CP.read('classPulseProfile',null), epoch='', question=null, view='', busy=false, reading=false, revision=0;
+  let profile=CP.read('classPulseProfile',null), epoch=CP.read('classPulseEpoch',''), question=null, view='', busy=false, reading=false, revision=0;
   const confirmed=new Set();
   const notice=document.createElement('p');notice.id='connectionNotice';notice.setAttribute('role','status');$('question').after(notice);
   const refresh=document.createElement('button');refresh.className='button';refresh.textContent='立即更新題目';refresh.addEventListener('click',()=>load());notice.after(refresh);
@@ -11,8 +11,8 @@
   function showCheckin(){if(view==='checkin')return;view='checkin';$('success').style.display='none';$('question').style.display='block';$('question').innerHTML='<span class="eyebrow">CHECK-IN</span><h2>先完成課前報到</h2><p>資料僅供本次課程統計，可使用匿名名稱。</p><form id="checkinForm"><label>性別<select class="input" id="gender" required>'+options(['女性','男性','非二元／其他','不透露'])+'</select></label><label>年齡<select class="input" id="age" required>'+options(ages)+'</select></label><label>職業<input class="input" id="job" maxlength="60" required placeholder="例如：零售業／學生／服務業"></label><label>居住縣市<select class="input" id="city" required>'+options(cities)+'</select></label><button class="button" type="submit">完成報到 →</button><p id="sendStatus" role="status" aria-live="polite"></p></form>';$('checkinForm').addEventListener('submit',checkin);}
   function success(){view='sent:'+question.id;$('question').innerHTML='<div class="check">✓</div><h2 style="text-align:center">答案已送出</h2><p style="text-align:center" role="status">系統已成功記錄你的答案，請等待下一題開放。</p>';}
   function render(d){
-    if(epoch&&epoch!==d.epoch){confirmed.clear();view='';profile=null;CP.save('classPulseProfile',null);$('login').style.display='block';$('success').style.display='none';$('question').style.display='none';notice.textContent='課堂已重置，請重新輸入姓名並報到。';epoch=d.epoch;return;}
-    epoch=d.epoch;question=d.activeQuestion;
+    if(epoch&&epoch!==d.epoch){confirmed.clear();view='';profile=null;CP.save('classPulseProfile',null);$('name').value='';$('login').style.display='block';$('success').style.display='none';$('question').style.display='none';notice.textContent='課堂已重置，請重新輸入姓名並報到。';epoch=d.epoch;CP.save('classPulseEpoch',epoch);return;}
+    epoch=d.epoch;CP.save('classPulseEpoch',epoch);question=d.activeQuestion;
     if(d.checkinRequired){showCheckin();return;}
     if(!question){view='waiting';$('question').style.display='none';$('success').style.display='block';$('status').textContent='請等待講師開放下一題';return;}
     $('success').style.display='none';$('question').style.display='block';

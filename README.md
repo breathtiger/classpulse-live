@@ -1,11 +1,36 @@
 # Google Apps Script 課堂互動系統
 
+## 目前正式入口（GitHub Pages）
+
+- 學員：https://breathtiger.github.io/classpulse-live/
+- 講師：https://breathtiger.github.io/classpulse-live/Admin.html
+- 投影：https://breathtiger.github.io/classpulse-live/Display.html
+
+前端使用原生 JavaScript，透過 POST 呼叫 Apps Script，Google Sheets 為資料來源。講師密碼只在登入時傳送，後續使用限時憑證，不存入網址或公開檔案。QR Code 請指向學員入口；不需要無痕模式。
+
+### 現場使用與重置
+
+- 姓名後會出現性別、年齡、職業、居住縣市報到表單；更新題目不會重建同一份未送出表單。
+- 學員依需求每 **60 秒**同步題目，也可按「立即更新題目」。講師每 5 秒同步；投影牆收到上次回應後隔 3 秒再次查詢，因此實際延遲還包含 Google 服務與網路時間，並非零延遲推播。
+- 送出時立刻停用按鈕並顯示「傳輸中...」；收到後端確認才顯示「答案已送出」。逾時表示結果尚未確認，可安全重試，不會重複計票。
+- 「開放中」為目前題目，「已開」為本次課堂曾開放題目，均由後端紀錄決定。
+- 「清除全部測試資料並重置」需兩次確認，會清空報到／作答、關閉題目、清除已開紀錄，讓學員重新報到；**不會改動 Questions 題庫或 ADMIN_KEY**。刪除不可復原，正式課程資料不要清除。
+- 回答原始資料在 Google Sheets 的 Responses，可由試算表「檔案 → 下載」匯出 CSV 或 Excel。投影不顯示學員姓名；開放題文字雲依最新 30 則回答中的逗號、頓號、空白切詞，完整回覆保存在試算表。
+
+### 維護與回歸測試
+
+GitHub Pages 發布 `index.html`、`Admin.html`、`Display.html` 與 `assets/`。後端更新時使用既有 Apps Script 部署 ID 發布新版本，保持網址不變。`.claspignore` 僅允許後端及 Apps Script 模板上傳，避免把瀏覽器程式誤當 Apps Script 執行。
+
+執行 `node tests/backend.test.cjs` 可在記憶體模擬試算表驗證權限、重複送答、投票、複選、計分、匿名文字統計、關題、完整重置與題庫保留。Node 僅用於開發測試及部署，正式網站不需要 Node 或第三方套件。
+
+以下為 Apps Script 原生模板的初始建置說明；正式課堂請使用上方三個入口，不要重新執行初始化或題庫安裝。
+
 這是單一課程使用的手機優先 Web App；資料保存在 Google Sheets，沒有外部套件或 CDN。
 
 ## 建立與設定
 
 1. 建立一個 Google 試算表，開啟「擴充功能 → Apps Script」。
-2. 在 Apps Script 專案中建立 `Code.gs`、`Student.html`、`Admin.html`、`Styles.html`，分別貼入同名檔案內容；也將 `appsscript.json` 貼到專案設定檔。
+2. 在 Apps Script 專案中建立 `Code.gs`、`Student.html`、`AdminApp.html`、`Styles.html`，分別貼入同名檔案內容；也將 `appsscript.json` 貼到專案設定檔。`Admin.html` 是 GitHub Pages 入口，與 `AdminApp.html` 原生模板不同。
 3. 若此為「綁定式」指令碼（從該試算表開啟 Apps Script），不需要設定試算表 ID。若為獨立專案，至「專案設定 → 指令碼屬性」新增 `SPREADSHEET_ID`，值為試算表網址 `/d/` 與下一個 `/` 之間的字串。
 4. 同一處新增 `ADMIN_KEY`，設定成長且難猜的隨機密碼。請勿把它放在公開教材。
 5. 在編輯器選擇 `setupSpreadsheet` 後按「執行」，依提示授權。它會建立 `Questions`、`Responses`、`Settings`，並加入五題示範題。可在 `Questions` 自訂題目；`options` 使用 JSON 陣列，例如 `["是","否"]`，`enabled` 使用 `TRUE` 或 `FALSE`。

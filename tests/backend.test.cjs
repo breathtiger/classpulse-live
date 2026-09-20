@@ -61,6 +61,7 @@ invoke('adminSetActive',token,'');
 assert.equal(invoke('getDisplayState').activeQuestion,null);
 assert.equal(invoke('submitResponse',answer).already,true,'遺失確認後即使關題仍可安全確認舊答案');
 const reset=invoke('deleteTestResponses',token);
+assert.equal(reset.questions.length,5,'重置不得刪除或重新安裝題庫');
 assert.equal(reset.activeQuestionId,'');assert.equal(reset.opened.length,0);
 assert.equal(tables.Responses.getLastRow(),1);
 assert.equal(Object.keys(reset.profileStats.profile_city.counts).length,0);
