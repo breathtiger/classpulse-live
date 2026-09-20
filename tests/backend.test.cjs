@@ -23,9 +23,9 @@ const ss={getSheetByName:n=>tables[n],insertSheet:n=>tables[n]=new Sheet()};
 const context=vm.createContext({
   Date,JSON,Math,Set,Map,console,
   SpreadsheetApp:{openById:()=>ss,flush(){}},
-  PropertiesService:{getScriptProperties:()=>({getProperty:k=>properties[k],setProperty:(k,v)=>properties[k]=v,deleteProperty:k=>delete properties[k]})},
-  CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v),remove:k=>cache.delete(k)})},
-  LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false);locked=true;},releaseLock(){locked=false;}})},
+  PropertiesService:{getScriptProperties:()=>({getProperties:()=>({...properties}),getProperty:k=>properties[k],setProperty:(k,v)=>properties[k]=v,deleteProperty:k=>delete properties[k]})},
+  CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v),putAll:values=>Object.entries(values).forEach(([k,v])=>cache.set(k,v)),remove:k=>cache.delete(k)})},
+  LockService:{getScriptLock:()=>({tryLock(){if(locked)return false;locked=true;return true;},waitLock(){assert.equal(locked,false);locked=true;},releaseLock(){locked=false;}})},
   Utilities:{getUuid:()=>crypto.randomUUID()},
   ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({text,setMimeType(){return this;}})}
 });
@@ -71,3 +71,27 @@ const response=invoke('doPost',{postData:{contents:JSON.stringify({api:'adminDas
 assert.equal(JSON.parse(response.text).error,'講師驗證失敗。');
 assert.equal(locked,false);
 console.log('PASS: authentication, check-in, idempotent retry, votes, multiple, quiz, text privacy, close, reset and stale-session protection.');
+const epoch=invoke('getStudentState','batch_0').epoch;
+invoke('adminSetActive',token,'q1');
+locked=true;
+for(let i=0;i<50;i++)assert.equal(invoke('submitQueued_',{
+  participantId:'batch_'+i,participantName:'壓測',epoch,questionId:'q1',answer:i%2?'很棒':'普通'
+},false).pending,true);
+locked=false;
+invoke('flushPending_');
+assert.equal(invoke('getDisplayState').stats.count,50);
+assert.equal(invoke('getDisplayState').stats.counts['很棒'],25);
+assert.equal(Object.keys(properties).filter(k=>k.startsWith('CPQ_')).length,0);
+cache.clear();
+invoke('submitQueued_',{participantId:'batch_0',participantName:'壓測',epoch,questionId:'q1',answer:'普通'},false);
+assert.equal(invoke('getDisplayState').stats.count,50,'快取遺失後重試仍不得重複');
+invoke('adminSetActive',token,'q4');
+for(let i=0;i<35;i++)invoke('submitResponse',{participantId:'batch_'+i,participantName:'壓測',epoch,questionId:'q4',answer:'內容'+i});
+invoke('adminSetActive',token,'');
+const all=invoke('getAdminReport',token);
+assert.equal(all.questions.length,5);
+assert.equal(all.questions.find(x=>x.question.id==='q1').stats.count,50);
+assert.equal(all.questions.find(x=>x.question.id==='q4').stats.texts.length,35,'全題報表不可只保留最近 30 則');
+assert.equal(all.answerCount,85);
+assert.throws(()=>invoke('getAdminReport','bad'),/驗證失敗/);
+console.log('PASS: 50 queued submissions, lost receipt retry, all-question report after close, full text retention.');
