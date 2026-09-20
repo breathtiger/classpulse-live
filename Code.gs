@@ -208,12 +208,18 @@ function getAdminKey_() { return PropertiesService.getScriptProperties().getProp
 function createAdminSession_(key) {
   if (!getAdminKey_() || String(key) !== getAdminKey_()) throw new Error('講師驗證失敗。');
   const token = 'admin_' + Utilities.getUuid().replace(/-/g, '');
-  CacheService.getScriptCache().put(token, '1', 21600);
+  PropertiesService.getScriptProperties().setProperty('ADMIN_SESSION_' + token, String(Date.now() + 21600000));
   return token;
 }
 function assertAdmin_(key) {
   const value = String(key || '');
-  if (value.indexOf('admin_') === 0 && CacheService.getScriptCache().get(value) === '1') return;
+  if (/^admin_[a-f0-9]{32}$/.test(value)) {
+    const sessions = PropertiesService.getScriptProperties();
+    const sessionKey = 'ADMIN_SESSION_' + value;
+    const expiresAt = Number(sessions.getProperty(sessionKey) || 0);
+    if (expiresAt > Date.now()) return;
+    if (expiresAt) sessions.deleteProperty(sessionKey);
+  }
   if (!getAdminKey_() || value !== getAdminKey_()) throw new Error('講師驗證失敗。');
 }
 function getSetting_(key) { const rows = sheet_('Settings').getDataRange().getValues(); const r = rows.slice(1).find(x => String(x[0]) === key); return r ? String(r[1] || '') : ''; }
