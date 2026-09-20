@@ -23,7 +23,7 @@
     <input class="input" id="name" maxlength="60" placeholder="例如：王小明／A-012">
     <button class="button" onclick="join()">開始參與 <b>→</b></button>
   </div><div class="card success" id="success"><div class="check">✓</div><span class="eyebrow">CONNECTED</span><h2>歡迎加入，<span id="shown"></span></h2><p id="status">正在連線至課堂系統…</p></div><div class="card" id="question" style="display:none"></div>
-  <p class="note">課程互動視覺展示<div class="links"><a href="Student.html">學員頁</a><a href="Admin.html">講師頁</a></div></p></section>
+  <p class="note">課程互動視覺展示<div class="links"><a href="./">學員頁</a><a href="Admin.html">講師頁</a></div></p></section>
 </main><script>
 const API='https://script.google.com/macros/s/AKfycbw2DmpkxEYlN89Y4zhDgYtf8T9ZrUGDWgO4wHF0ec1eUTB7RjW5XNq69kDHzdfL9erW/exec';let profile=null,serial=0;
 function esc(v){const x=document.createElement('div');x.textContent=v;return x.innerHTML}function api(params){return new Promise((resolve,reject)=>{const cb='cp'+Date.now()+(++serial);window[cb]=r=>{delete window[cb];s.remove();r.ok?resolve(r.data):reject()};const s=document.createElement('script');s.onerror=()=>reject();params.callback=cb;params.api&&Object.keys(params).forEach(k=>{});s.src=API+'?'+new URLSearchParams(params);document.body.appendChild(s)})}
