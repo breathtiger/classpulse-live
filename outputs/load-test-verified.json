@@ -1,0 +1,96 @@
+{
+  "startedAt": "2026-09-20T18:19:18.270Z",
+  "label": "verified",
+  "serverVersion": "report-batch2-20260921",
+  "participants": 50,
+  "isolated": true,
+  "phases": [
+    {
+      "name": "50 simultaneous check-ins",
+      "wallMs": 12879,
+      "requests": 50,
+      "success": 50,
+      "failed": 0,
+      "p50ms": 8451,
+      "p95ms": 12575,
+      "maxMs": 12877,
+      "failures": [],
+      "attempts": 115
+    },
+    {
+      "name": "50 simultaneous answers",
+      "wallMs": 12565,
+      "requests": 50,
+      "success": 50,
+      "failed": 0,
+      "p50ms": 7171,
+      "p95ms": 12094,
+      "maxMs": 12562,
+      "failures": [],
+      "attempts": 102
+    },
+    {
+      "name": "50 simultaneous state reads",
+      "wallMs": 4399,
+      "requests": 50,
+      "success": 50,
+      "failed": 0,
+      "p50ms": 3453,
+      "p95ms": 4193,
+      "maxMs": 4396,
+      "failures": [],
+      "attempts": 50
+    },
+    {
+      "name": "50 simultaneous quiz answers with course history",
+      "wallMs": 18615,
+      "requests": 50,
+      "success": 50,
+      "failed": 0,
+      "p50ms": 7601,
+      "p95ms": 14545,
+      "maxMs": 18613,
+      "failures": [],
+      "attempts": 103
+    },
+    {
+      "name": "50 simultaneous text answers with course history",
+      "wallMs": 14128,
+      "requests": 50,
+      "success": 50,
+      "failed": 0,
+      "p50ms": 7290,
+      "p95ms": 12870,
+      "maxMs": 14127,
+      "failures": [],
+      "attempts": 101
+    },
+    {
+      "name": "50 duplicate-answer retries",
+      "wallMs": 2567,
+      "requests": 50,
+      "success": 50,
+      "failed": 0,
+      "p50ms": 1489,
+      "p95ms": 2255,
+      "maxMs": 2563,
+      "failures": [],
+      "attempts": 50
+    }
+  ],
+  "projectedCount": 50,
+  "optionCounts": {
+    "是": 25,
+    "否": 25
+  },
+  "seededHistoryRows": 850,
+  "quizCorrectRate": 50,
+  "recordedRows": 1200,
+  "duplicateRows": 0,
+  "recordedCheckins": 50,
+  "recordedAnswers": 1000,
+  "testAccessRevoked": true,
+  "formalDataUnchanged": true,
+  "controlRetries": [],
+  "finishedAt": "2026-09-20T18:21:03.946Z"
+}
