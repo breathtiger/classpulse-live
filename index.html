@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClassPulse Live｜智慧零售升級</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eff3fb;color:#142044;font-family:Arial,"Noto Sans TC",sans-serif}.page{max-width:620px;min-height:100vh;margin:auto;background:#fff}.hero{position:relative;min-height:430px;padding:25px 23px;color:#fff;overflow:hidden;background:linear-gradient(140deg,#0c245c,#2453ad 53%,#6a37a9)}.art{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;object-position:65% center;opacity:.43;mix-blend-mode:screen}.hero>*:not(.art){position:relative;z-index:1}.brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;letter-spacing:.07em}.dots{display:flex;gap:4px}.dots i{width:9px;height:9px;border-radius:50%}.dots i:nth-child(1){background:#4285f4}.dots i:nth-child(2){background:#ea4335}.dots i:nth-child(3){background:#fbbc05}.dots i:nth-child(4){background:#34a853}.kicker{margin:52px 0 8px;font-size:13px;letter-spacing:.08em}.hero h1{font-size:34px;line-height:1.2;margin:0;font-weight:800}.hero h1 em{font-style:normal;color:#ffdc69}.topic{font-size:19px;font-weight:700;margin:14px 0 38px}.footer{display:flex;justify-content:space-between;align-items:center;font-size:12px}.live{padding:5px 9px;border:1px solid #ffffff78;border-radius:99px;font-weight:bold;letter-spacing:.1em}.live:before{content:"";display:inline-block;width:7px;height:7px;border-radius:99px;background:#ea4335;margin-right:5px}.stage{margin-top:-28px;padding:0 16px 35px;position:relative}.card{padding:25px;border-radius:23px;background:#fff;box-shadow:0 14px 35px #0d235126}.eyebrow{font-size:11px;color:#604cd7;letter-spacing:.16em;font-weight:800}.card h2{font-size:24px;margin:9px 0}.card p{color:#5b6782;line-height:1.65}.input{width:100%;border:1px solid #d9e0ef;border-radius:13px;padding:15px;font:inherit;background:#f9fbff}.button{display:flex;width:100%;justify-content:space-between;align-items:center;margin-top:15px;padding:15px 17px;border:0;border-radius:13px;background:linear-gradient(105deg,#306de8,#6545d9);color:white;font:bold 16px inherit;cursor:pointer}.button b{font-size:23px}.note{padding:17px 4px 0;text-align:center;color:#77829a;font-size:12px}.links{display:flex;justify-content:center;gap:14px;margin-top:9px}.links a{color:#335fc8;text-decoration:none;font-weight:bold}.success{display:none;text-align:center}.check{display:grid;place-items:center;width:58px;height:58px;margin:auto;border-radius:18px;background:#e3f7ec;color:#148447;font-size:30px;font-weight:bold}@media(max-width:420px){.hero{min-height:415px}.hero h1{font-size:30px}.card{padding:22px}}
+  </style>
+</head>
+<body><main class="page">
+  <header class="hero">
+    <img class="art" src="assets/retail-prediction-hero.png" alt="智慧零售商品預測插畫">
+    <div class="brand"><span class="dots"><i></i><i></i><i></i><i></i></span>CLASS PULSE LIVE</div>
+    <p class="kicker">竹北就業中心一般就業促進課程</p>
+    <h1>智慧零售升級<br><em>數位行銷秘密</em></h1>
+    <p class="topic">手機推薦商品怎麼來</p>
+    <div class="footer"><span>新譽管理有限公司 協辦</span><span class="live">LIVE</span></div>
+  </header>
+  <section class="stage"><div class="card" id="login">
+    <span class="eyebrow">WELCOME</span><h2>加入今日課程互動</h2>
+    <p>輸入顯示名稱或匿名編號，立即參與投票、測驗與提問。</p>
+    <input class="input" id="name" maxlength="60" placeholder="例如：王小明／A-012">
+    <button class="button" onclick="join()">開始參與 <b>→</b></button>
+  </div><div class="card success" id="success"><div class="check">✓</div><span class="eyebrow">READY</span><h2>歡迎加入，<span id="shown"></span></h2><p>這是 GitHub Pages 的視覺展示版。正式即時題目與作答請使用 Apps Script Web App。</p></div>
+  <p class="note">課程互動視覺展示<div class="links"><a href="Student.html">學員頁</a><a href="Admin.html">講師頁</a></div></p></section>
+</main><script>function join(){const v=document.getElementById('name').value.trim();if(!v){document.getElementById('name').focus();return}localStorage.setItem('classPulseName',v);document.getElementById('shown').textContent=v;document.getElementById('login').style.display='none';document.getElementById('success').style.display='block'}const n=localStorage.getItem('classPulseName');if(n){document.getElementById('name').value=n}</script></body></html>
