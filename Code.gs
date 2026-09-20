@@ -30,6 +30,10 @@ function apiGet_(p) {
     if (p.api === 'state') data = getStudentState(p.participantId);
     else if (p.api === 'setup') { assertAdmin_(p.adminKey); data = setupSpreadsheet(); }
     else if (p.api === 'installWorkshop') { assertAdmin_(p.adminKey); data = installWorkshopQuestionBank(); }
+    else if (p.api === 'adminDashboard') data = getAdminDashboard(p.adminKey);
+    else if (p.api === 'adminSetActive') data = adminSetActive(p.adminKey, p.questionId);
+    else if (p.api === 'adminNavigate') data = adminNavigate(p.adminKey, p.direction);
+    else if (p.api === 'deleteTestResponses') data = deleteTestResponses(p.adminKey);
     else if (p.api === 'checkin') {
       const profile = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(String(p.profile || ''))).getDataAsString());
       data = submitCheckin({participantId:p.participantId, participantName:p.participantName, profile:profile});
