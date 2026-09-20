@@ -28,6 +28,7 @@ function apiGet_(p) {
   try {
     let data;
     if (p.api === 'state') data = getStudentState(p.participantId);
+    else if (p.api === 'display') data = getDisplayState();
     else if (p.api === 'setup') { assertAdmin_(p.adminKey); data = setupSpreadsheet(); }
     else if (p.api === 'installWorkshop') { assertAdmin_(p.adminKey); data = installWorkshopQuestionBank(); }
     else if (p.api === 'adminDashboard') data = getAdminDashboard(p.adminKey);
@@ -137,6 +138,19 @@ function getStudentState(participantId) {
   const question = findQuestion_(id);
   if (!question || !question.enabled) return { activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
   return { activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id), checkinRequired: checkinRequired };
+}
+
+/** 投影畫面使用：只傳送公開題目與匿名化統計，不傳參與者名稱。 */
+function getDisplayState() {
+  const id = getSetting_('activeQuestionId');
+  if (!id) return {activeQuestion:null, stats:null};
+  const question = findQuestion_(id);
+  if (!question || !question.enabled) return {activeQuestion:null, stats:null};
+  const stats = getStats_(question);
+  return {
+    activeQuestion: publicQuestion_(question),
+    stats: {count:stats.count, counts:stats.counts, correctRate:stats.correctRate, texts:stats.texts.map(t => ({answer:t.answer}))}
+  };
 }
 
 function submitResponse(payload) {
