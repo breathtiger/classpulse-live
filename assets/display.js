@@ -1,0 +1,8 @@
+'use strict';
+(() => {
+ let busy=false,last='',lastTime=0;const app=document.getElementById('app');const status=document.createElement('p');status.id='displayStatus';status.setAttribute('role','status');app.before(status);
+ function terms(texts){const counts=new Map();for(const x of texts)for(const word of x.answer.split(/[，,、。！？!?；;／/\n\s]+/).filter(s=>s.length>1&&s.length<=24))counts.set(word,(counts.get(word)||0)+1);return [...counts].sort((a,b)=>b[1]-a[1]).slice(0,28);}
+ function render(d){const signature=JSON.stringify(d);if(last===signature)return;last=signature;const q=d.activeQuestion,s=d.stats;if(!q){app.className='empty';app.innerHTML='<div><p>等待講師開放題目</p><h1>課堂互動即時牆</h1><p>學員送出答案後，結果會自動更新</p></div>';return;}app.className='';let html='<div class="eyebrow">SLIDE '+CP.esc(q.page)+' · LIVE RESPONSE</div><h1 class="question">'+CP.esc(q.question)+'</h1><p class="count">目前已有 <b>'+s.count+'</b> 人送出答案'+(q.type==='quiz'?'　答對率 '+s.correctRate+'%':'')+'</p>';if(q.type==='open_text'){html+='<section class="cloud">'+terms(s.texts).map(([w,n])=>'<span class="word" style="font-size:'+Math.min(54,19+n*8)+'px">'+CP.esc(w)+'</span>').join('')+'</section><section class="latest">'+s.texts.slice(0,8).map(x=>'<article class="reply">'+CP.esc(x.answer)+'</article>').join('')+'</section>';}else html+='<section class="bars">'+CP.bars(s.counts,s.count)+'</section>';app.innerHTML=html;}
+ async function update(){if(busy)return;busy=true;try{const d=await CP.call('display');render(d);lastTime=Date.now();status.textContent='最近更新 '+new Date(lastTime).toLocaleTimeString('zh-TW')+' · 每 3 秒檢查';}catch(e){status.textContent='連線暫停，保留最後統計；正在重試。';}finally{busy=false;setTimeout(update,3000);}}
+ window.addEventListener('load',update,{once:true});
+})();

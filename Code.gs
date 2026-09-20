@@ -4,6 +4,40 @@ const SHEETS = {
   Responses: ['timestamp', 'participantId', 'participantName', 'questionId', 'answer', 'correct', 'score'],
   Settings: ['key', 'value']
 };
+let requestSpreadsheet_;
+let requestResponses_;
+function responses_() { return requestResponses_ || (requestResponses_ = sheet_('Responses').getDataRange().getValues().slice(1)); }
+function invalidate_() { requestResponses_ = null; CacheService.getScriptCache().remove('CLASS_PULSE_DISPLAY'); }
+function epoch_() { return getSetting_('resetEpoch') || 'initial'; }
+function checkEpoch_(value) { if (value && String(value) !== epoch_()) throw new Error('課堂已重置，請重新報到。'); }
+
+/** POST keeps passwords and responses out of URLs. */
+function doPost(e) {
+  let result;
+  try {
+    const p = JSON.parse(e.postData.contents);
+    let data;
+    switch (p.api) {
+      case 'ping': data = {version:'stable-20260921'}; break;
+      case 'login': data = {token:createAdminSession_(p.password)}; break;
+      case 'state': data = getStudentState(p.participantId); break;
+      case 'display': data = getDisplayState(); break;
+      case 'checkin': data = submitCheckin(p); break;
+      case 'submit': data = submitResponse(p); break;
+      case 'adminDashboard': data = getAdminDashboard(p.token); break;
+      case 'adminSetActive': data = adminSetActive(p.token,p.questionId); break;
+      case 'adminNavigate': data = adminNavigate(p.token,p.direction); break;
+      case 'deleteTestResponses': data = deleteTestResponses(p.token); break;
+      default: throw new Error('不支援的請求。');
+    }
+    result = {ok:true,data:data};
+  } catch(err) {
+    const message = String(err.message || '');
+    const safe = ['講師驗證失敗。','此題已關閉或尚未開放。','你已經送出這一題。','請完整填寫報到資料。','請選擇有效選項。','請輸入回答。','請至少選擇一個選項。','課堂已重置，請重新報到。'];
+    result = {ok:false,error:safe.indexOf(message)>=0?message:'服務暫時無法完成，請稍後重試。'};
+  }
+  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
 
 /** 首次設定用：將本課程試算表記錄為專案資料庫。 */
 function configureClassPulseSpreadsheet() {
@@ -123,9 +157,11 @@ function submitCheckin(payload) {
   if (!participantId || !participantName || !values.profile_gender || !values.profile_age || !values.profile_job || !values.profile_city) throw new Error('請完整填寫報到資料。');
   const lock = LockService.getScriptLock(); lock.waitLock(15000);
   try {
+    checkEpoch_(payload.epoch);
     if (hasResponded_(participantId, 'profile_gender')) return {ok:true, already:true};
     const rows = Object.keys(values).map(id => [new Date(), participantId, participantName, id, JSON.stringify(values[id]), '', 0]);
     sheet_('Responses').getRange(sheet_('Responses').getLastRow() + 1, 1, rows.length, 7).setValues(rows);
+    SpreadsheetApp.flush(); invalidate_();
     return {ok:true};
   } finally { lock.releaseLock(); }
 }
@@ -134,10 +170,10 @@ function getStudentState(participantId) {
   participantId = cleanId_(participantId);
   const checkinRequired = !hasResponded_(participantId, 'profile_gender');
   const id = getSetting_('activeQuestionId');
-  if (!id) return { activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
+  if (!id) return { epoch:epoch_(), activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
   const question = findQuestion_(id);
-  if (!question || !question.enabled) return { activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
-  return { activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id), checkinRequired: checkinRequired };
+  if (!question || !question.enabled) return { epoch:epoch_(), activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
+  return { epoch:epoch_(), activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id), checkinRequired: checkinRequired };
 }
 
 /** 投影畫面使用：只傳送公開題目與匿名化統計，不傳參與者名稱。 */
@@ -171,6 +207,9 @@ function submitResponse(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
+    checkEpoch_(payload.epoch);
+    // Retrying after a lost acknowledgement must not create another row.
+    if (hasResponded_(participantId, questionId)) return {ok:true,already:true};
     const active = getSetting_('activeQuestionId');
     if (active !== questionId) throw new Error('此題已關閉或尚未開放。');
     if (hasResponded_(participantId, questionId)) throw new Error('你已經送出這一題。');
@@ -181,6 +220,7 @@ function submitResponse(payload) {
     let score = 0;
     if (q.type === 'quiz') { correct = answersEqual_(answer, q.answer); score = correct ? Number(q.points || 0) : 0; }
     sheet_('Responses').appendRow([new Date(), participantId, participantName, questionId, JSON.stringify(answer), correct, score]);
+    SpreadsheetApp.flush(); invalidate_();
     return { ok: true, correct: correct, score: score };
   } finally { lock.releaseLock(); }
 }
@@ -190,15 +230,21 @@ function getAdminDashboard(adminKey) {
   const questions = getQuestions_();
   const activeId = getSetting_('activeQuestionId');
   const active = activeId ? findQuestion_(activeId) : null;
-  return { questions: questions.map(publicQuestion_), activeQuestionId: activeId, stats: active ? getStats_(active) : null, profileStats: getProfileStats_() };
+  return {epoch:epoch_(), opened:JSON.parse(getSetting_('openedQuestionIds')||'[]'), questions: questions.map(publicQuestion_), activeQuestionId: activeId, stats: active ? getStats_(active) : null, profileStats: getProfileStats_() };
 }
 
 function adminSetActive(adminKey, questionId) {
   assertAdmin_(adminKey);
   questionId = cleanId_(questionId);
   if (questionId && !findQuestion_(questionId)) throw new Error('找不到指定題目。');
-  setSetting_('activeQuestionId', questionId);
-  return true;
+  const lock=LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    setSetting_('activeQuestionId', questionId);
+    const opened=JSON.parse(getSetting_('openedQuestionIds')||'[]');
+    if(questionId && opened.indexOf(questionId)<0) {opened.push(questionId);setSetting_('openedQuestionIds',JSON.stringify(opened));}
+    SpreadsheetApp.flush(); invalidate_();
+  } finally {lock.releaseLock();}
+  return getAdminDashboard(adminKey);
 }
 
 function adminNavigate(adminKey, direction) {
@@ -209,8 +255,7 @@ function adminNavigate(adminKey, direction) {
   let i = list.findIndex(q => q.id === current);
   i = direction === 'prev' ? Math.max(0, i - 1) : Math.min(list.length - 1, i + 1);
   if (i < 0) i = 0;
-  setSetting_('activeQuestionId', list[i].id);
-  return true;
+  return adminSetActive(adminKey,list[i].id);
 }
 
 function deleteTestResponses(adminKey) {
@@ -220,14 +265,17 @@ function deleteTestResponses(adminKey) {
     const sh = sheet_('Responses');
     if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, SHEETS.Responses.length).clearContent();
     setSetting_('activeQuestionId', '');
-    CacheService.getScriptCache().remove('CLASS_PULSE_DISPLAY');
+    setSetting_('openedQuestionIds','[]');
+    setSetting_('resetEpoch',Utilities.getUuid());
+    SpreadsheetApp.flush(); invalidate_();
   } finally { lock.releaseLock(); }
-  return true;
+  return getAdminDashboard(adminKey);
 }
 
 function getSpreadsheet_() {
+  if (requestSpreadsheet_) return requestSpreadsheet_;
   const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') || '1U1fC3doBVEX4pQOgUtxoAqPzEMzZst718dLG7zzyh7k';
-  if (id) return SpreadsheetApp.openById(id);
+  if (id) return requestSpreadsheet_ = SpreadsheetApp.openById(id);
   const bound = SpreadsheetApp.getActiveSpreadsheet();
   if (!bound) throw new Error('尚未設定試算表。');
   return bound;
@@ -257,14 +305,14 @@ function getQuestions_() { const rows=sheet_('Questions').getDataRange().getValu
 function findQuestion_(id) { return getQuestions_().find(q => q.id === id); }
 function publicQuestion_(q) { return {id:q.id,page:q.page,type:q.type,question:q.question,options:q.options,points:q.points,enabled:q.enabled}; }
 function parseOptions_(v) { try { const a=JSON.parse(String(v||'[]')); return Array.isArray(a) ? a.map(x=>cleanText_(x,100)).filter(Boolean) : []; } catch(e) { return String(v||'').split(',').map(x=>cleanText_(x,100)).filter(Boolean); } }
-function hasResponded_(pid,qid) { return sheet_('Responses').getDataRange().getValues().slice(1).some(r=>String(r[1])===pid && String(r[3])===qid); }
+function hasResponded_(pid,qid) { return responses_().some(r=>String(r[1])===pid && String(r[3])===qid); }
 function validateAnswer_(q, value) { let a=q.type==='multiple' ? (Array.isArray(value)?value:[]) : value; if(q.type==='open_text') { a=cleanText_(a,500); if(!a) throw new Error('請輸入回答。'); return a; } if(q.type==='multiple') { a=[...new Set(a.map(x=>cleanText_(x,100)).filter(x=>q.options.indexOf(x)>=0))]; if(!a.length) throw new Error('請至少選擇一個選項。'); return a.sort(); } a=cleanText_(a,100); if(q.options.indexOf(a)<0) throw new Error('請選擇有效選項。'); return a; }
 function answersEqual_(a,b) { let expected; try { expected=JSON.parse(b); } catch(e) { expected=b; } return JSON.stringify(Array.isArray(a)?a.slice().sort():a) === JSON.stringify(Array.isArray(expected)?expected.slice().sort():expected); }
 function cleanText_(v,max) { return String(v == null ? '' : v).replace(/[<>]/g,'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max); }
 function cleanId_(v) { return cleanText_(v,80).replace(/[^A-Za-z0-9_-]/g,''); }
 function getProfileStats_() {
   const labels = {profile_gender:'性別', profile_age:'年齡', profile_job:'職業', profile_city:'居住縣市'};
-  const rows = sheet_('Responses').getDataRange().getValues().slice(1);
+  const rows = responses_();
   const result = {};
   Object.keys(labels).forEach(id => result[id] = {label:labels[id], counts:{}});
   rows.forEach(r => {
@@ -276,4 +324,4 @@ function getProfileStats_() {
   });
   return result;
 }
-function getStats_(q) { const rows=sheet_('Responses').getDataRange().getValues().slice(1).filter(r=>String(r[3])===q.id); const counts={}; q.options.forEach(o=>counts[o]=0); let correct=0; const texts=[]; rows.forEach(r=>{ let a;try{a=JSON.parse(r[4]);}catch(e){a=r[4];} (Array.isArray(a)?a:[a]).forEach(x=>{if(counts[x]!==undefined)counts[x]++;}); if(r[5]===true || String(r[5])==='true')correct++; if(q.type==='open_text') texts.push({name:cleanText_(r[2],60),answer:cleanText_(a,500),timestamp:String(r[0])}); }); return {count:rows.length, counts:counts, correct:correct, correctRate:rows.length?Math.round(correct/rows.length*100):0, texts:texts.slice(-30).reverse()}; }
+function getStats_(q) { const rows=responses_().filter(r=>String(r[3])===q.id); const counts={}; q.options.forEach(o=>counts[o]=0); let correct=0; const texts=[]; rows.forEach(r=>{ let a;try{a=JSON.parse(r[4]);}catch(e){a=r[4];} (Array.isArray(a)?a:[a]).forEach(x=>{if(counts[x]!==undefined)counts[x]++;}); if(r[5]===true || String(r[5])==='true')correct++; if(q.type==='open_text') texts.push({name:cleanText_(r[2],60),answer:cleanText_(a,500),timestamp:String(r[0])}); }); return {count:rows.length, counts:counts, correct:correct, correctRate:rows.length?Math.round(correct/rows.length*100):0, texts:texts.slice(-30).reverse()}; }
