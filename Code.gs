@@ -15,7 +15,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.api) return apiGet_(e.parameter);
   const key = String((e && e.parameter && e.parameter.adminKey) || '');
   const isAdmin = key && key === getAdminKey_();
-  const file = isAdmin ? 'Admin' : 'Student';
+  const file = isAdmin ? 'AdminApp' : 'Student';
   const t = HtmlService.createTemplateFromFile(file);
   t.adminKey = isAdmin ? key : '';
   return t.evaluate().setTitle(isAdmin ? '講師控制台' : '課堂互動').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -29,6 +29,11 @@ function apiGet_(p) {
     let data;
     if (p.api === 'state') data = getStudentState(p.participantId);
     else if (p.api === 'setup') { assertAdmin_(p.adminKey); data = setupSpreadsheet(); }
+    else if (p.api === 'installWorkshop') { assertAdmin_(p.adminKey); data = installWorkshopQuestionBank(); }
+    else if (p.api === 'checkin') {
+      const profile = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(String(p.profile || ''))).getDataAsString());
+      data = submitCheckin({participantId:p.participantId, participantName:p.participantName, profile:profile});
+    }
     else if (p.api === 'submit') {
       const answer = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(String(p.answer || ''))).getDataAsString());
       data = submitResponse({participantId:p.participantId, participantName:p.participantName, questionId:p.questionId, answer:answer});
@@ -65,13 +70,69 @@ function setupSpreadsheet() {
   return '初始化完成。請在 Script Properties 設定 ADMIN_KEY。';
 }
 
+/** 安裝「智慧零售升級」講座題庫；保留既有 Responses，方便課後匯出。 */
+function installWorkshopQuestionBank() {
+  setupSpreadsheet();
+  const rows = [
+    ['ad_repeat', 5, 'single', '曾經點過某個廣告後，就一直看到類似的廣告嗎？', '["是","否"]', '', 0, true],
+    ['youtube_use', 40, 'single', '你平常是否使用 YouTube？', '["是","否"]', '', 0, true],
+    ['youtube_follow', 40, 'single', '你是否追蹤過某些 YouTube 頻道？', '["是","否"]', '', 0, true],
+    ['google_maps', 40, 'single', '你是否使用 Google Maps？', '["是","否"]', '', 0, true],
+    ['facebook_use', 56, 'single', '你是否使用 Facebook？', '["是","否"]', '', 0, true],
+    ['instagram_use', 56, 'single', '你是否使用 Instagram？', '["是","否"]', '', 0, true],
+    ['threads_use', 56, 'single', '你是否使用 Threads？', '["是","否"]', '', 0, true],
+    ['linepay_use', 61, 'single', '你是否使用 LINE Pay？', '["是","否"]', '', 0, true],
+    ['line_sticker', 61, 'single', '你是否購買過 LINE 貼圖？', '["是","否"]', '', 0, true],
+    ['dcard_use', 63, 'single', '你是否使用 Dcard？', '["是","否"]', '', 0, true],
+    ['dcard_topics', 63, 'open_text', '你在 Dcard 都瀏覽哪些主題？', '[]', '', 0, true],
+    ['data_trust', 66, 'single', '你認為可以全然相信數據嗎？', '["可以","需要先檢查來源與脈絡","不可以"]', '', 0, true],
+    ['ai_trust', 66, 'single', '你認為可以全然相信 AI 嗎？', '["可以","需要查證與判斷","不可以"]', '', 0, true],
+    ['ai_bias', 67, 'quiz', 'Gemini 的回答強調特定國家觀點、輕視其他地區貢獻，違反哪項重要倫理原則？', '["故障／問題","演算法偏見","數據透明度","數位責任"]', '演算法偏見', 10, true],
+    ['ai_hallucination', 68, 'quiz', 'AI 聊天機器人產生看似可信但錯誤、荒謬或誤導的輸出，稱為什麼？', '["偏見","幻覺","錯誤訊息","故障"]', '幻覺', 10, true],
+    ['ga_engagement', 119, 'open_text', 'GA 報表實操：今年 1 月至今，哪個流量管道參與度最高？哪個工作階段來源／媒介平均參與時間最長？多久？', '[]', '', 0, true],
+    ['ga_pageviews', 126, 'open_text', 'GA 報表實操：過去一整年，哪一天單頁瀏覽量最多？請寫下日期、網頁標題與瀏覽量。', '[]', '', 0, true],
+    ['ga_purchase_city', 135, 'open_text', 'GA 報表實操：今年第 1 季，哪個國家的城市 Purchase 轉換最高？', '[]', '', 0, true],
+    ['ga_audience', 142, 'open_text', 'GA 報表實操：今年 1 至 5 月，Likely 7-day purchasers 的男性與女性，誰的實際交易次數較多？誰的總收益最多？收益多少？', '[]', '', 0, true],
+    ['audience_questions', 145, 'open_text', '課後提問箱：請留下你的問題或想法', '[]', '', 0, true]
+  ];
+  const sh = sheet_('Questions');
+  sh.clearContents();
+  sh.getRange(1, 1, 1, SHEETS.Questions.length).setValues([SHEETS.Questions]);
+  sh.getRange(2, 1, rows.length, SHEETS.Questions.length).setValues(rows);
+  sh.setFrozenRows(1);
+  setSetting_('activeQuestionId', '');
+  return '講座題庫已安裝，共 ' + rows.length + ' 題。';
+}
+
+function submitCheckin(payload) {
+  payload = payload || {};
+  const participantId = cleanId_(payload.participantId);
+  const participantName = cleanText_(payload.participantName, 60);
+  const p = payload.profile || {};
+  const values = {
+    profile_gender: cleanText_(p.gender, 30),
+    profile_age: cleanText_(p.age, 30),
+    profile_job: cleanText_(p.job, 60),
+    profile_city: cleanText_(p.city, 60)
+  };
+  if (!participantId || !participantName || !values.profile_gender || !values.profile_age || !values.profile_job || !values.profile_city) throw new Error('請完整填寫報到資料。');
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    if (hasResponded_(participantId, 'profile_gender')) return {ok:true, already:true};
+    const rows = Object.keys(values).map(id => [new Date(), participantId, participantName, id, JSON.stringify(values[id]), '', 0]);
+    sheet_('Responses').getRange(sheet_('Responses').getLastRow() + 1, 1, rows.length, 7).setValues(rows);
+    return {ok:true};
+  } finally { lock.releaseLock(); }
+}
+
 function getStudentState(participantId) {
   participantId = cleanId_(participantId);
+  const checkinRequired = !hasResponded_(participantId, 'profile_gender');
   const id = getSetting_('activeQuestionId');
-  if (!id) return { activeQuestion: null, submitted: false };
+  if (!id) return { activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
   const question = findQuestion_(id);
-  if (!question || !question.enabled) return { activeQuestion: null, submitted: false };
-  return { activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id) };
+  if (!question || !question.enabled) return { activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
+  return { activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id), checkinRequired: checkinRequired };
 }
 
 function submitResponse(payload) {
@@ -102,7 +163,7 @@ function getAdminDashboard(adminKey) {
   const questions = getQuestions_();
   const activeId = getSetting_('activeQuestionId');
   const active = activeId ? findQuestion_(activeId) : null;
-  return { questions: questions.map(publicQuestion_), activeQuestionId: activeId, stats: active ? getStats_(active) : null };
+  return { questions: questions.map(publicQuestion_), activeQuestionId: activeId, stats: active ? getStats_(active) : null, profileStats: getProfileStats_() };
 }
 
 function adminSetActive(adminKey, questionId) {
@@ -156,4 +217,18 @@ function validateAnswer_(q, value) { let a=q.type==='multiple' ? (Array.isArray(
 function answersEqual_(a,b) { let expected; try { expected=JSON.parse(b); } catch(e) { expected=b; } return JSON.stringify(Array.isArray(a)?a.slice().sort():a) === JSON.stringify(Array.isArray(expected)?expected.slice().sort():expected); }
 function cleanText_(v,max) { return String(v == null ? '' : v).replace(/[<>]/g,'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max); }
 function cleanId_(v) { return cleanText_(v,80).replace(/[^A-Za-z0-9_-]/g,''); }
+function getProfileStats_() {
+  const labels = {profile_gender:'性別', profile_age:'年齡', profile_job:'職業', profile_city:'居住縣市'};
+  const rows = sheet_('Responses').getDataRange().getValues().slice(1);
+  const result = {};
+  Object.keys(labels).forEach(id => result[id] = {label:labels[id], counts:{}});
+  rows.forEach(r => {
+    const id = String(r[3]);
+    if (!result[id]) return;
+    let value; try { value = JSON.parse(r[4]); } catch(e) { value = r[4]; }
+    value = cleanText_(value, 60);
+    if (value) result[id].counts[value] = (result[id].counts[value] || 0) + 1;
+  });
+  return result;
+}
 function getStats_(q) { const rows=sheet_('Responses').getDataRange().getValues().slice(1).filter(r=>String(r[3])===q.id); const counts={}; q.options.forEach(o=>counts[o]=0); let correct=0; const texts=[]; rows.forEach(r=>{ let a;try{a=JSON.parse(r[4]);}catch(e){a=r[4];} (Array.isArray(a)?a:[a]).forEach(x=>{if(counts[x]!==undefined)counts[x]++;}); if(r[5]===true || String(r[5])==='true')correct++; if(q.type==='open_text') texts.push({name:cleanText_(r[2],60),answer:cleanText_(a,500),timestamp:String(r[0])}); }); return {count:rows.length, counts:counts, correct:correct, correctRate:rows.length?Math.round(correct/rows.length*100):0, texts:texts.slice(-30).reverse()}; }
