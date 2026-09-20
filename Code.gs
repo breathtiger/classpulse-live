@@ -142,15 +142,24 @@ function getStudentState(participantId) {
 
 /** 投影畫面使用：只傳送公開題目與匿名化統計，不傳參與者名稱。 */
 function getDisplayState() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('CLASS_PULSE_DISPLAY');
+  if (cached) return JSON.parse(cached);
   const id = getSetting_('activeQuestionId');
-  if (!id) return {activeQuestion:null, stats:null};
+  if (!id) {
+    const empty = {activeQuestion:null, stats:null};
+    cache.put('CLASS_PULSE_DISPLAY', JSON.stringify(empty), 2);
+    return empty;
+  }
   const question = findQuestion_(id);
   if (!question || !question.enabled) return {activeQuestion:null, stats:null};
   const stats = getStats_(question);
-  return {
+  const result = {
     activeQuestion: publicQuestion_(question),
     stats: {count:stats.count, counts:stats.counts, correctRate:stats.correctRate, texts:stats.texts.map(t => ({answer:t.answer}))}
   };
+  cache.put('CLASS_PULSE_DISPLAY', JSON.stringify(result), 2);
+  return result;
 }
 
 function submitResponse(payload) {
@@ -210,6 +219,8 @@ function deleteTestResponses(adminKey) {
   try {
     const sh = sheet_('Responses');
     if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, SHEETS.Responses.length).clearContent();
+    setSetting_('activeQuestionId', '');
+    CacheService.getScriptCache().remove('CLASS_PULSE_DISPLAY');
   } finally { lock.releaseLock(); }
   return true;
 }
