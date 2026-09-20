@@ -17,7 +17,7 @@ function doGet(e) {
   const isAdmin = key && key === getAdminKey_();
   const file = isAdmin ? 'AdminApp' : 'Student';
   const t = HtmlService.createTemplateFromFile(file);
-  t.adminKey = isAdmin ? key : '';
+  t.adminKey = isAdmin ? createAdminSession_(key) : '';
   return t.evaluate().setTitle(isAdmin ? '講師控制台' : '課堂互動').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -205,7 +205,17 @@ function getSpreadsheet_() {
 }
 function sheet_(name) { const sh = getSpreadsheet_().getSheetByName(name); if (!sh) throw new Error('系統尚未初始化。請先執行 setupSpreadsheet。'); return sh; }
 function getAdminKey_() { return PropertiesService.getScriptProperties().getProperty('ADMIN_KEY') || ''; }
-function assertAdmin_(key) { if (!getAdminKey_() || String(key) !== getAdminKey_()) throw new Error('講師驗證失敗。'); }
+function createAdminSession_(key) {
+  if (!getAdminKey_() || String(key) !== getAdminKey_()) throw new Error('講師驗證失敗。');
+  const token = 'admin_' + Utilities.getUuid().replace(/-/g, '');
+  CacheService.getScriptCache().put(token, '1', 21600);
+  return token;
+}
+function assertAdmin_(key) {
+  const value = String(key || '');
+  if (value.indexOf('admin_') === 0 && CacheService.getScriptCache().get(value) === '1') return;
+  if (!getAdminKey_() || value !== getAdminKey_()) throw new Error('講師驗證失敗。');
+}
 function getSetting_(key) { const rows = sheet_('Settings').getDataRange().getValues(); const r = rows.slice(1).find(x => String(x[0]) === key); return r ? String(r[1] || '') : ''; }
 function setSetting_(key, value) { const sh=sheet_('Settings'), rows=sh.getDataRange().getValues(), i=rows.slice(1).findIndex(x=>String(x[0])===key); if(i>=0) sh.getRange(i+2,2).setValue(value); else sh.appendRow([key,value]); }
 function getQuestions_() { const rows=sheet_('Questions').getDataRange().getValues(); return rows.slice(1).filter(r=>r[0]).map(r=>({id:String(r[0]),page:r[1],type:String(r[2]),question:String(r[3]),options:parseOptions_(r[4]),answer:String(r[5]||''),points:Number(r[6]||0),enabled:r[7] === true || String(r[7]).toLowerCase()==='true'})); }
