@@ -41,7 +41,7 @@ function doPost(e) {
     result = {ok:true,data:data};
   } catch(err) {
     const message = String(err.message || '');
-    const safe = ['講師驗證失敗。','此題已關閉或尚未開放。','你已經送出這一題。','請完整填寫報到資料。','請選擇有效選項。','請輸入回答。','請至少選擇一個選項。','課堂已重置，請重新報到。'];
+    const safe = ['講師驗證失敗。','此題已關閉或尚未開放。','你已經送出這一題。','請完整填寫報到資料。','請選擇有效選項。','請輸入回答。','請至少選擇一個選項。','課堂已重置，請重新報到。','電子報信箱僅能在課後提問填寫。','請輸入有效的電子郵件地址，或留空不訂閱。','請確認願意收到阿一老師的電子報。'];
     result = {ok:false,retryable:safe.indexOf(message)<0,error:safe.indexOf(message)>=0?message:'服務暫時無法完成，請稍後重試。'};
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
