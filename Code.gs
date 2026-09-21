@@ -22,7 +22,7 @@ function doPost(e) {
     if (['state','display','adminDashboard','adminReport'].indexOf(p.api)>=0) flushPending_();
     let data;
     switch (p.api) {
-      case 'ping': data = {version:'report-batch2-20260921'}; break;
+      case 'ping': data = {version:'newsletter-20260921'}; break;
       case 'login': data = {token:createAdminSession_(p.password)}; break;
       case 'state': data = getStudentState(p.participantId); break;
       case 'display': data = getDisplayState(); break;
@@ -204,6 +204,7 @@ function submitQueued_(p,checkin) {
     if(!q)throw new Error('此題已關閉或尚未開放。');
     const answer=validateAnswer_(q,p.answer),correct=q.type==='quiz'?answersEqual_(answer,q.answer):'';
     rows=[[new Date().toISOString(),pid,name,qid,JSON.stringify(answer),correct,correct?Number(q.points||0):0]];
+    rows=rows.concat(newsletterRows_(q,p,rows[0]));
   }
   const key='CPQ_'+requestNamespace_+'_'+meta.epoch+'_'+pid+'_'+qid;
   PropertiesService.getScriptProperties().setProperty(key,JSON.stringify({epoch:meta.epoch,pid:pid,qid:qid,rows:rows}));
@@ -291,7 +292,10 @@ function submitResponse(payload) {
     let correct = '';
     let score = 0;
     if (q.type === 'quiz') { correct = answersEqual_(answer, q.answer); score = correct ? Number(q.points || 0) : 0; }
-    sheet_('Responses').appendRow([new Date(), participantId, participantName, questionId, JSON.stringify(answer), correct, score]);
+    const row=[new Date(), participantId, participantName, questionId, JSON.stringify(answer), correct, score];
+    const rows=[row].concat(newsletterRows_(q,payload,row));
+    const sh=sheet_('Responses');
+    sh.getRange(sh.getLastRow()+1,1,rows.length,7).setValues(rows);
     SpreadsheetApp.flush(); invalidate_();
     return { ok: true, correct: correct, score: score };
   } finally { lock.releaseLock(); }
@@ -447,7 +451,16 @@ function getSetting_(key) { const rows = sheet_('Settings').getDataRange().getVa
 function setSetting_(key, value) { const sh=sheet_('Settings'), rows=sh.getDataRange().getValues(), i=rows.slice(1).findIndex(x=>String(x[0])===key); if(i>=0) sh.getRange(i+2,2).setValue(value); else sh.appendRow([key,value]); }
 function getQuestions_() { const rows=sheet_('Questions').getDataRange().getValues(); return rows.slice(1).filter(r=>r[0]).map(r=>({id:String(r[0]),page:r[1],type:String(r[2]),question:String(r[3]),options:parseOptions_(r[4]),answer:String(r[5]||''),points:Number(r[6]||0),enabled:r[7] === true || String(r[7]).toLowerCase()==='true'})); }
 function findQuestion_(id) { return getQuestions_().find(q => q.id === id); }
-function publicQuestion_(q) { return {id:q.id,page:q.page,type:q.type,question:q.question,options:q.options,points:q.points,enabled:q.enabled}; }
+function publicQuestion_(q) { return {id:q.id,page:q.page,type:q.type,question:q.question,options:q.options,points:q.points,enabled:q.enabled,newsletterSignup:q.id==='audience_questions'}; }
+/** Private opt-in data is stored separately, never inside a projected answer. */
+function newsletterRows_(q,p,row) {
+  const email=String(p.newsletterEmail==null?'':p.newsletterEmail).trim();
+  if(!email)return [];
+  if(q.id!=='audience_questions')throw new Error('電子報信箱僅能在課後提問填寫。');
+  if(email.length>254||! /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)||/[\u0000-\u001f\u007f]/.test(email))throw new Error('請輸入有效的電子郵件地址，或留空不訂閱。');
+  if(p.newsletterConsent!==true)throw new Error('請確認願意收到阿一老師的電子報。');
+  return [[row[0],row[1],row[2],'newsletter_email',JSON.stringify({email:email,consent:true,purpose:'願意收到阿一老師的電子報',consentVersion:'20260921'}),'',0]];
+}
 function parseOptions_(v) { try { const a=JSON.parse(String(v||'[]')); return Array.isArray(a) ? a.map(x=>cleanText_(x,100)).filter(Boolean) : []; } catch(e) { return String(v||'').split(',').map(x=>cleanText_(x,100)).filter(Boolean); } }
 function hasResponded_(pid,qid) { return responses_().some(r=>String(r[1])===pid && String(r[3])===qid); }
 function validateAnswer_(q, value) { let a=q.type==='multiple' ? (Array.isArray(value)?value:[]) : value; if(q.type==='open_text') { a=cleanText_(a,500); if(!a) throw new Error('請輸入回答。'); return a; } if(q.type==='multiple') { a=[...new Set(a.map(x=>cleanText_(x,100)).filter(x=>q.options.indexOf(x)>=0))]; if(!a.length) throw new Error('請至少選擇一個選項。'); return a.sort(); } a=cleanText_(a,100); if(q.options.indexOf(a)<0) throw new Error('請選擇有效選項。'); return a; }

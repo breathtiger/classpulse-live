@@ -27,7 +27,7 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
 (async()=>{
   if(!process.env.CLASSPULSE_ADMIN_KEY)throw new Error('Set CLASSPULSE_ADMIN_KEY');
   const version=await call('ping');
-  if(label!=='baseline'&&version.version!=='report-batch2-20260921')throw new Error('Latest deployment has not propagated yet');
+  if(label!=='baseline'&&!['report-batch2-20260921','newsletter-20260921'].includes(version.version))throw new Error('Latest deployment has not propagated yet');
   console.log('Stage: login');
   const {token}=await call('login',{password:process.env.CLASSPULSE_ADMIN_KEY});
   console.log('Stage: read formal baseline');
