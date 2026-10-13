@@ -15,14 +15,17 @@ function checkEpoch_(value) { if (value && String(value) !== epoch_()) throw new
 
 /** POST keeps passwords and responses out of URLs. */
 function doPost(e) {
+  requestSpreadsheet_=undefined;requestResponses_=undefined;requestNamespace_='main';requestCourseId_='';
   let result;
   try {
     const p = JSON.parse(e.postData.contents);
+    if(p.course)useCourse_(p.course);
     if (p.testToken) useLoadTest_(p.testToken);
     if (['state','display','adminDashboard','adminReport'].indexOf(p.api)>=0) flushPending_();
     let data;
     switch (p.api) {
-      case 'ping': data = {version:'newsletter-20260921'}; break;
+      case 'ping': data = {version:'courses-20261013'}; break;
+      case 'createMarketCourse': data = createMarketCourse_(p.token); break;
       case 'login': data = {token:createAdminSession_(p.password)}; break;
       case 'state': data = getStudentState(p.participantId); break;
       case 'display': data = getDisplayState(); break;
@@ -38,10 +41,10 @@ function doPost(e) {
       case 'deleteTestResponses': data = deleteTestResponses(p.token); break;
       default: throw new Error('不支援的請求。');
     }
-    result = {ok:true,data:data};
+    result = {ok:true,course:requestCourseId_,data:data};
   } catch(err) {
     const message = String(err.message || '');
-    const safe = ['講師驗證失敗。','此題已關閉或尚未開放。','你已經送出這一題。','請完整填寫報到資料。','請選擇有效選項。','請輸入回答。','請至少選擇一個選項。','課堂已重置，請重新報到。','電子報信箱僅能在課後提問填寫。','請輸入有效的電子郵件地址，或留空不訂閱。','請確認願意收到阿一老師的電子報。'];
+    const safe = ['找不到此課程，請確認連結。','此課程尚未開放，請稍後再試。','講師驗證失敗。','此題已關閉或尚未開放。','你已經送出這一題。','請完整填寫報到資料。','請選擇有效選項。','請輸入回答。','請至少選擇一個選項。','課堂已重置，請重新報到。','電子報信箱僅能在課後提問填寫。','請輸入有效的電子郵件地址，或留空不訂閱。','請確認願意收到阿一老師的電子報。'];
     result = {ok:false,retryable:safe.indexOf(message)<0,error:safe.indexOf(message)>=0?message:'服務暫時無法完成，請稍後重試。'};
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -155,18 +158,12 @@ function submitCheckin(payload) {
   payload = payload || {};
   const participantId = cleanId_(payload.participantId);
   const participantName = cleanText_(payload.participantName, 60);
-  const p = payload.profile || {};
-  const values = {
-    profile_gender: cleanText_(p.gender, 30),
-    profile_age: cleanText_(p.age, 30),
-    profile_job: cleanText_(p.job, 60),
-    profile_city: cleanText_(p.city, 60)
-  };
-  if (!participantId || !participantName || !values.profile_gender || !values.profile_age || !values.profile_job || !values.profile_city) throw new Error('請完整填寫報到資料。');
+  const values = checkinValues_(payload.profile);
+  if (!participantId || !participantName) throw new Error('請完整填寫報到資料。');
   const lock = LockService.getScriptLock(); lock.waitLock(15000);
   try {
     checkEpoch_(payload.epoch);
-    if (hasResponded_(participantId, 'profile_gender')) return {ok:true, already:true};
+    if (hasResponded_(participantId, checkinMarker_())) return {ok:true, already:true};
     const rows = Object.keys(values).map(id => [new Date(), participantId, participantName, id, JSON.stringify(values[id]), '', 0]);
     sheet_('Responses').getRange(sheet_('Responses').getLastRow() + 1, 1, rows.length, 7).setValues(rows);
     SpreadsheetApp.flush(); invalidate_();
@@ -185,7 +182,7 @@ function courseMetadata_() {
 function receiptKey_(epoch,pid,qid) {return 'ACK_'+requestNamespace_+'_'+epoch+'_'+pid+'_'+qid;}
 function submitQueued_(p,checkin) {
   const pid=cleanId_(p.participantId),name=cleanText_(p.participantName,60);
-  const qid=checkin?'profile_gender':cleanId_(p.questionId);
+  const qid=checkin?checkinMarker_():cleanId_(p.questionId);
   if(!pid||!name||!qid)throw new Error('請完整填寫報到資料。');
   const meta=courseMetadata_();
   if(String(p.epoch||'')!==meta.epoch)throw new Error('課堂已重置，請重新報到。');
@@ -193,10 +190,8 @@ function submitQueued_(p,checkin) {
   const acknowledged=cache.get(receipt);if(acknowledged)return JSON.parse(acknowledged);
   let rows;
   if(checkin){
-    const values=p.profile||{},keys=['gender','age','job','city'];
-    const valuesClean=keys.map(k=>cleanText_(values[k],60));
-    if(valuesClean.some(v=>!v))throw new Error('請完整填寫報到資料。');
-    rows=keys.map((k,i)=>[new Date().toISOString(),pid,name,'profile_'+k,JSON.stringify(valuesClean[i]),'',0]);
+    const values=checkinValues_(p.profile);
+    rows=Object.keys(values).map(k=>[new Date().toISOString(),pid,name,k,JSON.stringify(values[k]),'',0]);
   }else{
     // Lost acknowledgements remain safe to retry even after a question is closed.
     if(meta.active!==qid){if(hasResponded_(pid,qid))return {ok:true,already:true};throw new Error('此題已關閉或尚未開放。');}
@@ -241,12 +236,13 @@ function flushPending_() {
 
 function getStudentState(participantId) {
   participantId = cleanId_(participantId);
-  const checkinRequired = !hasResponded_(participantId, 'profile_gender');
+  const checkinRequired = !hasResponded_(participantId, checkinMarker_());
+  const extra = requestCourseId_ ? {checkinFields:checkinFields_()} : {};
   const id = getSetting_('activeQuestionId');
-  if (!id) return { epoch:epoch_(), activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
+  if (!id) return { ...extra, epoch:epoch_(), activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
   const question = findQuestion_(id);
-  if (!question || !question.enabled) return { epoch:epoch_(), activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
-  return { epoch:epoch_(), activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id), checkinRequired: checkinRequired };
+  if (!question || !question.enabled) return { ...extra, epoch:epoch_(), activeQuestion: null, submitted: false, checkinRequired: checkinRequired };
+  return { ...extra, epoch:epoch_(), activeQuestion: publicQuestion_(question), submitted: hasResponded_(participantId, id), checkinRequired: checkinRequired };
 }
 
 /** 投影畫面使用：只傳送公開題目與匿名化統計，不傳參與者名稱。 */
@@ -318,7 +314,7 @@ function getAdminReport(adminKey) {
   const answers=rows.filter(r=>questionIds.has(String(r[3])));
   return {
     epoch:epoch_(), generatedAt:new Date().toISOString(),
-    participantCount:new Set(rows.filter(r=>String(r[3])==='profile_gender').map(r=>String(r[1]))).size,
+    participantCount:new Set(rows.filter(r=>String(r[3])===checkinMarker_()).map(r=>String(r[1]))).size,
     respondentCount:new Set(answers.map(r=>String(r[1]))).size,
     answerCount:answers.length,
     profileStats:getProfileStats_(),
@@ -329,7 +325,7 @@ function getAdminReport(adminKey) {
 /** Admin-only isolated database, on the same deployment and execution limits. */
 function startLoadTest_(adminKey) {
   assertAdmin_(adminKey);
-  if(requestNamespace_!=='main')throw new Error('不支援的請求。');
+  if(requestNamespace_.indexOf('test_')===0)throw new Error('不支援的請求。');
   const questionRows=sheet_('Questions').getDataRange().getValues();
   const ss=SpreadsheetApp.create('ClassPulse 隔離壓力測試 '+new Date().toISOString());
   Object.keys(SHEETS).forEach(name=>{
@@ -341,7 +337,7 @@ function startLoadTest_(adminKey) {
   const testEpoch=Utilities.getUuid();
   ss.getSheetByName('Settings').getRange(2,1,3,2).setValues([['activeQuestionId',''],['openedQuestionIds','[]'],['resetEpoch',testEpoch]]);
   SpreadsheetApp.flush();
-  PropertiesService.getScriptProperties().setProperty('LOAD_TEST_'+testToken,JSON.stringify({id:ss.getId(),expires:Date.now()+3600000}));
+  PropertiesService.getScriptProperties().setProperty('LOAD_TEST_'+testToken,JSON.stringify({id:ss.getId(),courseId:requestCourseId_,expires:Date.now()+3600000}));
   return {testToken:testToken,epoch:testEpoch,questionCount:questionRows.length-1};
 }
 function useLoadTest_(token) {
@@ -349,6 +345,7 @@ function useLoadTest_(token) {
   const value=PropertiesService.getScriptProperties().getProperty('LOAD_TEST_'+token);
   const context=value?JSON.parse(value):null;
   if(!context||context.expires<Date.now())throw new Error('不支援的請求。');
+  if((context.courseId||'')!==requestCourseId_)throw new Error('找不到此課程，請確認連結。');
   requestNamespace_='test_'+token;
   requestSpreadsheet_=SpreadsheetApp.openById(context.id);
   requestResponses_=undefined;
@@ -468,7 +465,7 @@ function answersEqual_(a,b) { let expected; try { expected=JSON.parse(b); } catc
 function cleanText_(v,max) { return String(v == null ? '' : v).replace(/[<>]/g,'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max); }
 function cleanId_(v) { return cleanText_(v,80).replace(/[^A-Za-z0-9_-]/g,''); }
 function getProfileStats_() {
-  const labels = {profile_gender:'性別', profile_age:'年齡', profile_job:'職業', profile_city:'居住縣市'};
+  const labels = {};checkinFields_().forEach(f=>labels['profile_'+f.id]=f.label);
   const rows = responses_();
   const result = {};
   Object.keys(labels).forEach(id => result[id] = {label:labels[id], counts:{}});

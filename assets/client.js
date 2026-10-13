@@ -1,15 +1,21 @@
 'use strict';
 const CP = (() => {
+  const course=typeof window!=='undefined'&&window.CLASS_PULSE_COURSE?window.CLASS_PULSE_COURSE:null;
+  const courseId=course?course.id:'';
+  const expectedCourse=typeof document!=='undefined'?document.documentElement?.dataset?.course||'':'';
   const endpoint = 'https://script.google.com/macros/s/AKfycbw2DmpkxEYlN89Y4zhDgYtf8T9ZrUGDWgO4wHF0ec1eUTB7RjW5XNq69kDHzdfL9erW/exec';
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
   async function once(api, payload = {}) {
+    if(expectedCourse&&courseId!==expectedCourse)throw new Error('課程設定載入失敗，請重新整理。');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25000);
     try {
-      const response = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({api,...payload}),signal:controller.signal,credentials:'omit',redirect:'follow'});
+      const body=courseId?{api,...payload,course:courseId}:{api,...payload};
+      const response = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(body),signal:controller.signal,credentials:'omit',redirect:'follow'});
       if (!response.ok) throw Object.assign(new Error('服務暫時忙碌，請稍後重試。'),{retryable:[404,408,429].includes(response.status)||response.status>=500});
       const result = await response.json();
       if (!result.ok) throw Object.assign(new Error(result.error || '操作未完成，請重試。'),{retryable:!!result.retryable});
+      if(courseId&&result.course!==courseId)throw new Error('課程連線不符，請重新整理或聯絡講師。');
       return result.data;
     } catch (error) {
       if (error.name === 'AbortError') throw Object.assign(new Error('尚未收到確認；資料可能已送達，請按重試確認，不會重複計票。'),{retryable:true});
@@ -34,8 +40,9 @@ const CP = (() => {
     }
     throw new Error('尚未收到寫入確認，請按重新送出／確認結果；系統不會重複計票。');
   }
-  function read(key, fallback) {try {return JSON.parse(localStorage.getItem(key)) || fallback;}catch (_) {return fallback;}}
-  function save(key,value) {try {localStorage.setItem(key,JSON.stringify(value));}catch (_) {}}
+  const storageKey=key=>(courseId||expectedCourse)?(courseId||expectedCourse)+':'+key:key;
+  function read(key, fallback) {try {return JSON.parse(localStorage.getItem(storageKey(key))) || fallback;}catch (_) {return fallback;}}
+  function save(key,value) {try {localStorage.setItem(storageKey(key),JSON.stringify(value));}catch (_) {}}
   function bars(counts,total) {return Object.entries(counts).map(([label,n]) => '<div class="barrow"><div class="barlabel label"><span>'+esc(label)+'</span><b>'+n+' 票 · '+(total?Math.round(n/total*100):0)+'%</b></div><div class="bar track"><span class="fill" style="display:block;width:'+Math.min(100,total?n/total*100:0)+'%"></span></div></div>').join('');}
-  return {call,esc,read,save,bars};
+  return {call,esc,read,save,bars,course};
 })();

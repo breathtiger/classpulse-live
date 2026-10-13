@@ -1,5 +1,25 @@
 # Google Apps Script 課堂互動系統
 
+## 2026-10-15 線上講座
+
+新場次 ID 為 `market-20261015`，標題「市場先知術－客戶行為預測導航」。
+
+- 學員：https://breathtiger.github.io/classpulse-live/market-20261015/
+- 講師：https://breathtiger.github.io/classpulse-live/market-20261015/Admin.html
+- 顯示：https://breathtiger.github.io/classpulse-live/market-20261015/Display.html
+
+講師密碼沿用既有設定。講師頁可展開學員 QR Code，或將學員網址貼到線上會議聊天室。
+請使用本場三個網址；不要把舊課程短網址視為已更新，原簡報及短網址均未修改。
+
+- 22 題依最新版 157 頁簡報安排。P77「因為有數據，所以可以相信」及 P78「AI不會騙人，所以可以相信」，選項為同意／不同意／不確定。P117 不設互動；P99/P100 重複測驗不計入。
+- GA 練習頁碼 P131、P138、P147、P154，課後提問 P157。新增 P25 信賴度測驗、P31 詢價行為複選。P156 的承辦問卷仍保留於原簡報，不修改簡報或短網址。
+- 新場次課前調查：職務、GA4 經驗、學習需求必填，性別、年齡、縣市選填。電子報信箱僅在最後一題選填，不出現在公開統計。
+- 已驗證講師透過 `createMarketCourse` 建立獨立試算表。操作可重試，只填入空的新表，不會覆寫既有題目與回答。原場次無 `course` 的 API 行為不變。
+- 新場次前端每個請求固定帶場次 ID，localStorage 也依場次隔離。未知場次、設定檔缺失或伺服器回傳場次不符時拒絕操作，不會退回原課程。
+- 新場次重置只作用於新表。壓測仍在額外隔離試算表進行，測試憑證綁定場次，完成後撤銷。
+- 本機回歸測試：`node tests/backend.test.cjs`、`node tests/client.test.cjs`、`node tests/course-client.test.cjs`、`node tests/report.test.cjs`。
+- Google 授權過期時，以 `clasp login` 重新登入後再部署。不得在未成功部署與驗證前向學員宣稱新網址已可用。
+
 ## 目前正式入口（GitHub Pages）
 
 - 學員：https://breathtiger.github.io/classpulse-live/

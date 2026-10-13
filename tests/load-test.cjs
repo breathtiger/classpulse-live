@@ -4,12 +4,13 @@ const path=require('node:path');
 const vm=require('node:vm');
 const endpoint='https://script.google.com/macros/s/AKfycbw2DmpkxEYlN89Y4zhDgYtf8T9ZrUGDWgO4wHF0ec1eUTB7RjW5XNq69kDHzdfL9erW/exec';
 const label=process.argv[2]||'baseline';
-const clientContext=vm.createContext({fetch,AbortController,setTimeout,clearTimeout,console,SyntaxError,TypeError});
+const course=process.env.CLASSPULSE_COURSE||'';
+const clientContext=vm.createContext({fetch,AbortController,setTimeout,clearTimeout,console,SyntaxError,TypeError,window:{CLASS_PULSE_COURSE:course?{id:course}:null}});
 vm.runInContext(fs.readFileSync('assets/client.js','utf8')+';globalThis.clientCall=CP.call;',clientContext);
 async function studentCall(api,payload){let attempts=0;const result=await clientContext.clientCall(api,payload,{onAttempt:n=>attempts=n});return {...result,attempts};}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function callOnce(api,payload={}){
-  const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({api,...payload}),signal:AbortSignal.timeout(25000)});
+  const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({api,...payload,...(course?{course}: {})}),signal:AbortSignal.timeout(25000)});
   if(!response.ok)throw new Error('HTTP '+response.status);
   let result;try{result=await response.json();}catch(_){throw new Error('Non-JSON response');}
   if(!result.ok)throw new Error(result.error||'API failure');
@@ -27,7 +28,7 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
 (async()=>{
   if(!process.env.CLASSPULSE_ADMIN_KEY)throw new Error('Set CLASSPULSE_ADMIN_KEY');
   const version=await call('ping');
-  if(label!=='baseline'&&!['report-batch2-20260921','newsletter-20260921'].includes(version.version))throw new Error('Latest deployment has not propagated yet');
+  if(label!=='baseline'&&!['report-batch2-20260921','newsletter-20260921','courses-20261013'].includes(version.version))throw new Error('Latest deployment has not propagated yet');
   console.log('Stage: login');
   const {token}=await call('login',{password:process.env.CLASSPULSE_ADMIN_KEY});
   console.log('Stage: read formal baseline');
@@ -41,7 +42,7 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
   const p=i=>({testToken,epoch,participantId:'load_'+i,participantName:'壓測學員'+(i+1)});
   const send=label==='baseline'?call:studentCall;
   const report={startedAt:new Date().toISOString(),label,serverVersion:version.version,participants:50,isolated:true,phases:[]};
-  report.phases.push(await wave('50 simultaneous check-ins',i=>send('checkin',{...p(i),profile:{gender:i%2?'女性':'男性',age:'36-45 歲',job:'模擬壓測',city:'新竹縣'}})));
+  report.phases.push(await wave('50 simultaneous check-ins',i=>send('checkin',{...p(i),profile:course?{job:'行銷',ga_experience:'沒用過',goal:'找新客'}:{gender:i%2?'女性':'男性',age:'36-45 歲',job:'模擬壓測',city:'新竹縣'}})));
   const q=dashboardBefore.questions.find(q=>q.enabled&&q.type==='single');
   await call('adminSetActive',{testToken,token,questionId:q.id});
   report.phases.push(await wave('50 simultaneous answers',i=>send('submit',{...p(i),questionId:q.id,answer:q.options[i%q.options.length]})));

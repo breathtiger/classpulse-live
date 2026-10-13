@@ -20,9 +20,11 @@ class Sheet {
   setFrozenRows(){}
 }
 const ss={getSheetByName:n=>tables[n],insertSheet:n=>tables[n]=new Sheet()};
+const databases=new Map();let createdBooks=0;
+function createBook(){const sheets={};const id='test_book_'+(++createdBooks);const book={getId:()=>id,getSheetByName:n=>sheets[n],insertSheet:n=>sheets[n]=new Sheet()};databases.set(id,book);return book;}
 const context=vm.createContext({
   Date,JSON,Math,Set,Map,console,
-  SpreadsheetApp:{openById:()=>ss,flush(){}},
+  SpreadsheetApp:{openById:id=>databases.get(id)||ss,create:createBook,flush(){}},
   PropertiesService:{getScriptProperties:()=>({getProperties:()=>({...properties}),getProperty:k=>properties[k],setProperty:(k,v)=>properties[k]=v,deleteProperty:k=>delete properties[k]})},
   CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v),putAll:values=>Object.entries(values).forEach(([k,v])=>cache.set(k,v)),remove:k=>cache.delete(k)})},
   LockService:{getScriptLock:()=>({tryLock(){if(locked)return false;locked=true;return true;},waitLock(){assert.equal(locked,false);locked=true;},releaseLock(){locked=false;}})},
@@ -30,6 +32,7 @@ const context=vm.createContext({
   ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({text,setMimeType(){return this;}})}
 });
 vm.runInContext(fs.readFileSync('Code.gs','utf8'),context);
+vm.runInContext(fs.readFileSync('Courses.gs','utf8'),context);
 function invoke(name,...args){vm.runInContext('requestSpreadsheet_=undefined;requestResponses_=undefined;',context);return context[name](...args);}
 invoke('setupSpreadsheet');
 const token=invoke('createAdminSession_','test-only-password');
@@ -124,3 +127,47 @@ invoke('deleteTestResponses',token);
 assert.equal(tables.Responses.getLastRow(),1,'重置必須一併清除測試信箱');
 assert.equal(invoke('getAdminReport',token).questions.length,6,'原有題庫保留');
 console.log('PASS: optional newsletter opt-in, validation, queue/legacy persistence, idempotency, privacy and reset.');
+function post(api,p={}){return JSON.parse(invoke('doPost',{postData:{contents:JSON.stringify({api,...p})}}).text);}
+const originalSnapshot=JSON.stringify(tables);
+assert.equal(post('createMarketCourse',{token:'bad'}).ok,false);
+assert.equal(createdBooks,0);
+const provision=post('createMarketCourse',{token});
+assert.equal(provision.ok,true);assert.equal(provision.data.questionCount,22);
+const course=provision.data.courseId;
+const again=post('createMarketCourse',{token});assert.equal(again.data.spreadsheetUrl,provision.data.spreadsheetUrl);assert.equal(createdBooks,1);
+let dash=post('adminDashboard',{course,token}).data;
+assert.equal(dash.questions.length,22);assert.equal(dash.opened.length,0);assert.equal(dash.activeQuestionId,'');
+assert.equal(dash.questions.find(q=>q.id==='trust_data').page,77);
+assert.equal(dash.questions.find(q=>q.id==='trust_ai').page,78);
+assert.equal(dash.questions.find(q=>q.id==='audience_questions').page,157);
+assert.equal(dash.questions.some(q=>[116,117,99,100].includes(q.page)),false);
+assert.deepEqual(Array.from(dash.questions.filter(q=>q.id.startsWith('ga_')).map(q=>q.page)),[131,138,147,154]);
+const newState=post('state',{course,participantId:'new_student'}).data;
+assert.equal(newState.checkinRequired,true);assert.equal(newState.checkinFields.length,6);
+const newcomer={course,protocol:'batch1',epoch:newState.epoch,participantId:'new_student',participantName:'測試',profile:{job:'行銷',ga_experience:'沒用過',goal:'找新客'}};
+assert.equal(post('checkin',{...newcomer,profile:{job:'行銷'}}).ok,false);
+assert.equal(post('checkin',newcomer).data.ok,true);
+assert.equal(post('state',{course,participantId:'new_student'}).data.checkinRequired,false);
+assert.equal(post('state',{participantId:'new_student'}).data.checkinRequired,true,'跨場次不能繼承報到');
+assert.equal(post('adminReport',{course,token}).data.participantCount,1);
+for(const q of dash.questions){
+ assert.equal(post('adminSetActive',{course,token,questionId:q.id}).ok,true);
+ const answer=q.type==='open_text'?'測試回覆':q.type==='multiple'?[q.options[0],q.options[1]]:q.options[0];
+ assert.equal(post('submit',{...newcomer,questionId:q.id,answer}).data.ok,true,q.id);
+ assert.equal(post('display',{course}).data.stats.count,1);
+}
+assert.equal(post('adminReport',{course,token}).data.answerCount,22);
+assert.equal(JSON.stringify(tables),originalSnapshot,'建立新課與全部作答不得改動舊資料');
+assert.equal(post('state',{course:'not-a-course'}).ok,false,'未知場次不得回退舊場次');
+const isolation=post('startLoadTest',{course,token});assert.equal(isolation.ok,true);
+const testToken=isolation.data.testToken;
+assert.equal(post('state',{testToken}).ok,false,'測試憑證不能跨場次');
+assert.equal(post('state',{course,testToken}).ok,true);
+assert.equal(post('finishLoadTest',{course,testToken,token}).data.accessRevoked,true);
+assert.equal(post('state',{course,testToken}).ok,false);
+const resetCourse=post('deleteTestResponses',{course,token});assert.equal(resetCourse.data.questions.length,22);
+assert.equal(post('adminReport',{course,token}).data.answerCount,0);
+assert.equal(JSON.stringify(tables),originalSnapshot,'新課重置不得改動舊資料');
+assert.equal(post('createMarketCourse',{token}).data.questionCount,22);
+assert.equal(post('adminReport',{course,token}).data.answerCount,0);
+console.log('PASS: isolated course provisioning, 22 questions, new check-in, all-question answers, test-scope access and reset without changing original data.');

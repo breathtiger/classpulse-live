@@ -3,6 +3,7 @@
  const $=id=>document.getElementById(id);let token='',data=null,busy=false,reading=false,revision=0,lastRender='',reportOpen=false;
  const status=document.createElement('p');status.id='adminStatus';status.setAttribute('role','status');$('app').before(status);
  const links=document.createElement('p');links.className='report-link';links.innerHTML='<a href="Display.html" target="_blank" rel="noopener">開啟投影即時統計牆 ↗</a>';status.before(links);
+ if(CP.course){const share=document.createElement('section');share.className='report-link';share.innerHTML='<p><a href="./" target="_blank" rel="noopener">開啟學員操作頁 ↗</a></p><details><summary>顯示學員 QR Code</summary><p>掃碼或將學員網址貼到線上會議聊天室。</p><img src="student-qr.png" width="220" height="220" alt="本場講座學員操作入口 QR Code"></details>';links.after(share);}
  const tabs=document.createElement('nav');tabs.className='admin-tabs hidden';tabs.innerHTML='<button class="btn alt" id="tabLive" aria-pressed="true">即時控制台</button><button class="btn alt" id="tabReport" aria-pressed="false">全題統計總覽</button>';$('app').before(tabs);
  const report=document.createElement('div');report.id='courseReport';report.className='hidden';$('app').after(report);
  function switchTab(showReport){reportOpen=showReport;revision++;$('app').classList.toggle('hidden',showReport);report.classList.toggle('hidden',!showReport);$('tabLive').setAttribute('aria-pressed',String(!showReport));$('tabReport').setAttribute('aria-pressed',String(showReport));if(showReport&&!report.innerHTML)report.innerHTML='<section class="card">正在載入全題統計…</section>';load();}
