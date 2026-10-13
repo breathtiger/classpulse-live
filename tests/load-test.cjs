@@ -52,6 +52,7 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
   if(label!=='baseline'){
     const history=await call('seedLoadHistory',{testToken,token});report.seededHistoryRows=history.seededRows;
     const quiz=history.quiz,wrong=quiz.options.find(o=>o!==history.correctOption);
+    if(!quiz.options.includes(history.correctOption))throw new Error('Quiz answer key does not match an option');
     await call('adminSetActive',{testToken,token,questionId:quiz.id});
     report.phases.push(await wave('50 simultaneous quiz answers with course history',i=>send('submit',{...p(i),questionId:quiz.id,answer:i%2?wrong:history.correctOption})));
     const quizState=await call('display',{testToken});report.quizCorrectRate=quizState.stats.correctRate;
@@ -66,4 +67,5 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
   report.formalDataUnchanged=JSON.stringify(before.questions)===JSON.stringify(after.questions)&&JSON.stringify(before.profileStats)===JSON.stringify(after.profileStats)&&dashboardBefore.activeQuestionId===dashboardAfter.activeQuestionId&&JSON.stringify(dashboardBefore.opened)===JSON.stringify(dashboardAfter.opened);
   report.controlRetries=controlRetries;report.finishedAt=new Date().toISOString();fs.mkdirSync('outputs',{recursive:true});fs.writeFileSync(path.join('outputs','load-test-'+label+'.json'),JSON.stringify(report,null,2));
   console.log('FINAL '+JSON.stringify(report));
+  if(report.phases.some(p=>p.failed)||report.duplicateRows||!report.formalDataUnchanged||!report.testAccessRevoked||report.projectedCount!==50||(label!=='baseline'&&report.quizCorrectRate!==50))process.exitCode=1;
 })().catch(e=>{console.error('Load test stopped:',e.message);process.exitCode=1;});

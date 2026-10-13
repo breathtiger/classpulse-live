@@ -129,6 +129,10 @@ assert.equal(invoke('getAdminReport',token).questions.length,6,'原有題庫保�
 console.log('PASS: optional newsletter opt-in, validation, queue/legacy persistence, idempotency, privacy and reset.');
 function post(api,p={}){return JSON.parse(invoke('doPost',{postData:{contents:JSON.stringify({api,...p})}}).text);}
 const originalSnapshot=JSON.stringify(tables);
+assert.equal(invoke('questionAnswer_',0.667,['40%','60%','66.7%','100%']),'66.7%');
+assert.equal(invoke('answersEqual_','66.7%',invoke('questionAnswer_',0.667,['66.7%'])),true);
+assert.equal(invoke('questionAnswer_',0,['0%','100%']),'0%');
+assert.equal(invoke('questionAnswer_','演算法偏見',['演算法偏見']),'演算法偏見');
 assert.equal(post('createMarketCourse',{token:'bad'}).ok,false);
 assert.equal(createdBooks,0);
 const provision=post('createMarketCourse',{token});

@@ -446,7 +446,16 @@ function assertAdmin_(key) {
 }
 function getSetting_(key) { const rows = sheet_('Settings').getDataRange().getValues(); const r = rows.slice(1).find(x => String(x[0]) === key); return r ? String(r[1] || '') : ''; }
 function setSetting_(key, value) { const sh=sheet_('Settings'), rows=sh.getDataRange().getValues(), i=rows.slice(1).findIndex(x=>String(x[0])===key); if(i>=0) sh.getRange(i+2,2).setValue(value); else sh.appendRow([key,value]); }
-function getQuestions_() { const rows=sheet_('Questions').getDataRange().getValues(); return rows.slice(1).filter(r=>r[0]).map(r=>({id:String(r[0]),page:r[1],type:String(r[2]),question:String(r[3]),options:parseOptions_(r[4]),answer:String(r[5]||''),points:Number(r[6]||0),enabled:r[7] === true || String(r[7]).toLowerCase()==='true'})); }
+// Sheets may coerce a percent answer (66.7%) to its numeric value (0.667).
+// Resolve that value back to the exact option label before grading.
+function questionAnswer_(value,options) {
+  if(typeof value==='number'){
+    const percent=options.find(o=>/^[-+]?\d+(?:\.\d+)?%$/.test(o)&&Math.abs(Number(o.slice(0,-1))/100-value)<1e-10);
+    if(percent!==undefined)return percent;
+  }
+  return value===null||value===undefined?'':String(value);
+}
+function getQuestions_() { const rows=sheet_('Questions').getDataRange().getValues(); return rows.slice(1).filter(r=>r[0]).map(r=>{const options=parseOptions_(r[4]);return {id:String(r[0]),page:r[1],type:String(r[2]),question:String(r[3]),options:options,answer:questionAnswer_(r[5],options),points:Number(r[6]||0),enabled:r[7] === true || String(r[7]).toLowerCase()==='true'};}); }
 function findQuestion_(id) { return getQuestions_().find(q => q.id === id); }
 function publicQuestion_(q) { return {id:q.id,page:q.page,type:q.type,question:q.question,options:q.options,points:q.points,enabled:q.enabled,newsletterSignup:q.id==='audience_questions'}; }
 /** Private opt-in data is stored separately, never inside a projected answer. */
