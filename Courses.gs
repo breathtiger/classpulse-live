@@ -43,6 +43,7 @@ function marketCheckinFields_() {
   ];
 }
 function checkinFields_() {
+  if(requestCourseId_===HR_COURSE_ID)return hrCheckinFields_();
   return requestCourseId_===MARKET_COURSE_ID?marketCheckinFields_():[
     {id:'gender',label:'性別',required:true},{id:'age',label:'年齡',required:true},
     {id:'job',label:'職業',required:true},{id:'city',label:'居住縣市',required:true}
@@ -60,7 +61,7 @@ function checkinValues_(profile) {
   return values;
 }
 function useCourse_(id) {
-  if(id!==MARKET_COURSE_ID)throw new Error('找不到此課程，請確認連結。');
+  if(![MARKET_COURSE_ID,HR_COURSE_ID].includes(id))throw new Error('找不到此課程，請確認連結。');
   const value=PropertiesService.getScriptProperties().getProperty('COURSE_'+id);
   const record=value?JSON.parse(value):null;
   if(!record||!record.ready)throw new Error('此課程尚未開放，請稍後再試。');

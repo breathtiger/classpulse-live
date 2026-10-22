@@ -28,7 +28,7 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
 (async()=>{
   if(!process.env.CLASSPULSE_ADMIN_KEY)throw new Error('Set CLASSPULSE_ADMIN_KEY');
   const version=await call('ping');
-  if(label!=='baseline'&&!['report-batch2-20260921','newsletter-20260921','courses-20261013'].includes(version.version))throw new Error('Latest deployment has not propagated yet');
+  if(label!=='baseline'&&!['report-batch2-20260921','newsletter-20260921','courses-20261013','hr-20261022'].includes(version.version))throw new Error('Latest deployment has not propagated yet');
   console.log('Stage: login');
   const {token}=await call('login',{password:process.env.CLASSPULSE_ADMIN_KEY});
   console.log('Stage: read formal baseline');
@@ -42,7 +42,9 @@ async function wave(name,fn){const start=Date.now();const rows=await Promise.all
   const p=i=>({testToken,epoch,participantId:'load_'+i,participantName:'壓測學員'+(i+1)});
   const send=label==='baseline'?call:studentCall;
   const report={startedAt:new Date().toISOString(),label,serverVersion:version.version,participants:50,isolated:true,phases:[]};
-  report.phases.push(await wave('50 simultaneous check-ins',i=>send('checkin',{...p(i),profile:course?{job:'行銷',ga_experience:'沒用過',goal:'找新客'}:{gender:i%2?'女性':'男性',age:'36-45 歲',job:'模擬壓測',city:'新竹縣'}})));
+  const checkinState=course?await call('state',{testToken,participantId:'load_0'}):null;
+  const courseProfile=checkinState?Object.fromEntries(checkinState.checkinFields.filter(f=>f.required).map(f=>[f.id,f.options[0]])):null;
+  report.phases.push(await wave('50 simultaneous check-ins',i=>send('checkin',{...p(i),profile:courseProfile||{gender:i%2?'女性':'男性',age:'36-45 歲',job:'模擬壓測',city:'新竹縣'}})));
   const q=dashboardBefore.questions.find(q=>q.enabled&&q.type==='single');
   await call('adminSetActive',{testToken,token,questionId:q.id});
   report.phases.push(await wave('50 simultaneous answers',i=>send('submit',{...p(i),questionId:q.id,answer:q.options[i%q.options.length]})));

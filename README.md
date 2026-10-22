@@ -1,5 +1,19 @@
 # Google Apps Script 課堂互動系統
 
+## 2026-10-22 人資讀心術
+
+獨立場次 `hr-20261022`，不覆寫原課程或 `market-20261015`。
+
+- 學員：https://breathtiger.github.io/classpulse-live/hr-20261022/
+- 講師：https://breathtiger.github.io/classpulse-live/hr-20261022/Admin.html
+- 顯示：https://breathtiger.github.io/classpulse-live/hr-20261022/Display.html
+- 依 103 頁「人資讀心術－數據驅動人才管理」簡報建立 21 題，含原簡報 P26、27、32、36、50、52、76、78、83 測驗。其餘為新增的課堂情境互動，講師可自由跳題。
+- 報到必填職務、AI 使用經驗、學習需求；性別、年齡、縣市選填。請勿提交真實員工資料或公司機密。
+- 課後提問 P103，電子報信箱選填且不公開。講師沿用原密碼，可顯示學員 QR Code、全題統計、CSV 與列印報表。
+- `createHRCourse` 僅供講師建立獨立試算表，可安全重試，不覆寫既有資料；`HRCourse.gs` 必須與 `Courses.gs` 一起部署。
+- 學員仍每 60 秒同步，或按「立即更新題目」。展示頁每次查詢完成後 3 秒再查詢，並非 WebSocket 秒級推送。Google 服務延遲與重試可能延長等待時間。
+- 本次沒有修改原 PPT 或其中的外部連結。
+
 ## 2026-10-15 線上講座
 
 新場次 ID 為 `market-20261015`，標題「市場先知術－客戶行為預測導航」。

@@ -1,6 +1,7 @@
 **/**
 !Code.gs
 !Courses.gs
+!HRCourse.gs
 !appsscript.json
 !Student.html
 !AdminApp.html

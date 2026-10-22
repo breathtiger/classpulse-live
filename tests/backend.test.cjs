@@ -33,6 +33,7 @@ const context=vm.createContext({
 });
 vm.runInContext(fs.readFileSync('Code.gs','utf8'),context);
 vm.runInContext(fs.readFileSync('Courses.gs','utf8'),context);
+vm.runInContext(fs.readFileSync('HRCourse.gs','utf8'),context);
 function invoke(name,...args){vm.runInContext('requestSpreadsheet_=undefined;requestResponses_=undefined;',context);return context[name](...args);}
 invoke('setupSpreadsheet');
 const token=invoke('createAdminSession_','test-only-password');
@@ -175,3 +176,45 @@ assert.equal(JSON.stringify(tables),originalSnapshot,'新課重置不得改動�
 assert.equal(post('createMarketCourse',{token}).data.questionCount,22);
 assert.equal(post('adminReport',{course,token}).data.answerCount,0);
 console.log('PASS: isolated course provisioning, 22 questions, new check-in, all-question answers, test-scope access and reset without changing original data.');
+const marketSnapshot=JSON.stringify(post('adminReport',{course,token}).data);
+assert.equal(post('createHRCourse',{token:'bad'}).ok,false);
+const hrCreated=post('createHRCourse',{token});assert.equal(hrCreated.ok,true);
+const hr=hrCreated.data.courseId;
+assert.equal(hrCreated.data.questionCount,21);
+assert.equal(post('createHRCourse',{token}).data.spreadsheetUrl,hrCreated.data.spreadsheetUrl);
+const hrDash=post('adminDashboard',{course:hr,token}).data;
+assert.equal(hrDash.activeQuestionId,'');assert.equal(hrDash.opened.length,0);
+assert.deepEqual(hrDash.questions.map(q=>q.page),[6,26,27,30,32,36,43,46,50,52,53,57,69,75,76,78,83,94,99,101,103]);
+assert.equal(new Set(hrDash.questions.map(q=>q.id)).size,21);
+const hrState=post('state',{course:hr,participantId:'hr_person'}).data;
+assert.equal(hrState.checkinFields[1].id,'ai_experience');
+const hrPerson={course:hr,participantId:'hr_person',participantName:'隔離測試',epoch:hrState.epoch,protocol:'batch1',profile:{job:'人資／招募',ai_experience:'每週使用',goal:'智慧招募'}};
+assert.equal(post('checkin',{...hrPerson,profile:{job:'行銷',ga_experience:'沒用過',goal:'找新客'}}).ok,false);
+assert.equal(post('checkin',hrPerson).data.ok,true);
+assert.equal(post('state',{course,participantId:'hr_person'}).data.checkinRequired,true);
+const hrRows=invoke('hrQuestions_');
+for(const q of hrDash.questions){
+  assert.equal(post('adminSetActive',{course:hr,token,questionId:q.id}).ok,true);
+  const answer=q.type==='quiz'?JSON.parse(hrRows.find(r=>r[0]===q.id)[5]):q.type==='open_text'?'測試回覆':q.type==='multiple'?[q.options[0],q.options[1]]:q.options[0];
+  const payload={...hrPerson,questionId:q.id,answer,...(q.newsletterSignup?{newsletterEmail:'hr@example.com',newsletterConsent:true}:{})};
+  assert.equal(post('submit',payload).data.ok,true,q.id);
+  assert.equal(post('submit',payload).data.ok,true,q.id+' retry');
+  const display=post('display',{course:hr}).data;
+  assert.equal(display.stats.count,1);if(q.type==='quiz')assert.equal(display.stats.correctRate,100,q.id);
+  assert.equal(JSON.stringify(display).includes('hr@example.com'),false);
+}
+post('adminSetActive',{course:hr,token,questionId:''});
+const hrReport=post('adminReport',{course:hr,token}).data;
+assert.equal(hrReport.questions.length,21);assert.equal(hrReport.answerCount,21);assert.equal(hrReport.participantCount,1);
+assert.equal(post('createHRCourse',{token}).data.questionCount,21);
+assert.equal(post('adminReport',{course:hr,token}).data.answerCount,21,'再次建立不得抹除現有資料');
+const hrScope=post('startLoadTest',{course:hr,token}).data;
+assert.equal(post('state',{course,testToken:hrScope.testToken}).ok,false);
+assert.equal(post('state',{testToken:hrScope.testToken}).ok,false);
+assert.equal(post('finishLoadTest',{course:hr,token,testToken:hrScope.testToken}).data.accessRevoked,true);
+post('deleteTestResponses',{course:hr,token});
+assert.equal(post('adminReport',{course:hr,token}).data.answerCount,0);
+assert.equal(post('adminDashboard',{course:hr,token}).data.opened.length,0);
+assert.equal(JSON.stringify(post('adminReport',{course,token}).data.questions),JSON.stringify(JSON.parse(marketSnapshot).questions));
+assert.equal(JSON.stringify(tables),originalSnapshot);
+console.log('PASS: HR 21-question bank, all quiz keys, check-in, newsletter privacy, idempotency, report, reset and three-course isolation.');
