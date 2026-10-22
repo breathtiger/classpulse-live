@@ -24,9 +24,10 @@ function doPost(e) {
     if (['state','display','adminDashboard','adminReport'].indexOf(p.api)>=0) flushPending_();
     let data;
     switch (p.api) {
-      case 'ping': data = {version:'hr-20261022',loadTestMax:500}; break;
+      case 'ping': data = {version:'hr-20261022',loadTestMax:500,hrRevision:'110slides-16questions'}; break;
       case 'createMarketCourse': data = createMarketCourse_(p.token); break;
       case 'createHRCourse': data = createHRCourse_(p.token); break;
+      case 'removeSelectedHRQuestions': data = removeSelectedHRQuestions_(p.token); break;
       case 'login': data = {token:createAdminSession_(p.password)}; break;
       case 'state': data = getStudentState(p.participantId); break;
       case 'display': data = getDisplayState(); break;

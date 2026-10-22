@@ -17,6 +17,7 @@ class Sheet {
   };}
   appendRow(row) {this.rows[this.getLastRow()]=row;}
   clearContents(){this.rows=[];}
+  deleteRow(row){this.rows.splice(row-1,1);}
   setFrozenRows(){}
 }
 const ss={getSheetByName:n=>tables[n],insertSheet:n=>tables[n]=new Sheet()};
@@ -180,12 +181,12 @@ const marketSnapshot=JSON.stringify(post('adminReport',{course,token}).data);
 assert.equal(post('createHRCourse',{token:'bad'}).ok,false);
 const hrCreated=post('createHRCourse',{token});assert.equal(hrCreated.ok,true);
 const hr=hrCreated.data.courseId;
-assert.equal(hrCreated.data.questionCount,21);
+assert.equal(hrCreated.data.questionCount,16);
 assert.equal(post('createHRCourse',{token}).data.spreadsheetUrl,hrCreated.data.spreadsheetUrl);
 const hrDash=post('adminDashboard',{course:hr,token}).data;
 assert.equal(hrDash.activeQuestionId,'');assert.equal(hrDash.opened.length,0);
-assert.deepEqual(hrDash.questions.map(q=>q.page),[6,26,27,30,32,36,43,46,50,52,53,57,69,75,76,78,83,94,99,101,103]);
-assert.equal(new Set(hrDash.questions.map(q=>q.id)).size,21);
+assert.deepEqual(hrDash.questions.map(q=>q.page),[5,27,28,31,34,38,52,54,58,74,78,81,83,88,107,110]);
+assert.equal(new Set(hrDash.questions.map(q=>q.id)).size,16);
 const hrState=post('state',{course:hr,participantId:'hr_person'}).data;
 assert.equal(hrState.checkinFields[1].id,'ai_experience');
 const hrPerson={course:hr,participantId:'hr_person',participantName:'隔離測試',epoch:hrState.epoch,protocol:'batch1',profile:{job:'人資／招募',ai_experience:'每週使用',goal:'智慧招募'}};
@@ -205,20 +206,41 @@ for(const q of hrDash.questions){
 }
 post('adminSetActive',{course:hr,token,questionId:''});
 const hrReport=post('adminReport',{course:hr,token}).data;
-assert.equal(hrReport.questions.length,21);assert.equal(hrReport.answerCount,21);assert.equal(hrReport.participantCount,1);
-assert.equal(post('createHRCourse',{token}).data.questionCount,21);
-assert.equal(post('adminReport',{course:hr,token}).data.answerCount,21,'再次建立不得抹除現有資料');
+assert.equal(hrReport.questions.length,16);assert.equal(hrReport.answerCount,16);assert.equal(hrReport.participantCount,1);
+assert.equal(post('createHRCourse',{token}).data.questionCount,16);
+assert.equal(post('adminReport',{course:hr,token}).data.answerCount,16,'再次建立不得抹除現有資料');
 const hrScope=post('startLoadTest',{course:hr,token}).data;
 assert.equal(post('state',{course,testToken:hrScope.testToken}).ok,false);
 assert.equal(post('state',{testToken:hrScope.testToken}).ok,false);
 for(const participants of [0,501,1.5,'bad'])assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants}).ok,false);
 assert.equal(post('seedLoadHistory',{course:hr,token,participants:500}).ok,false,'Never seed formal data');
-assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants:500}).data.seededRows,9500);
+assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants:500}).data.seededRows,7000);
 assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants:500}).data.seededRows,0,'History seed is idempotent');
 assert.equal(post('finishLoadTest',{course:hr,token,testToken:hrScope.testToken}).data.accessRevoked,true);
+const hrBook=databases.get(JSON.parse(properties['COURSE_'+hr]).id);
+hrBook.getSheetByName('Questions').getRange(2,2).setValue(6);
+const removedPairs=[['recruitment_funnel',43],['structured_interview',46],['suitability_score',53],['privacy_first',94],['first_pilot',99]];
+for(const [id,page] of removedPairs)hrBook.getSheetByName('Questions').appendRow([id,page,'single','舊題目','["A","B"]','',0,true]);
+post('adminSetActive',{course:hr,token,questionId:'recruitment_funnel'});
+post('submit',{...hrPerson,questionId:'recruitment_funnel',answer:'A'});
+const preservedResponses=JSON.stringify(hrBook.getSheetByName('Responses').rows);
+assert.equal(post('removeSelectedHRQuestions',{course:hr,token:'bad'}).ok,false);
+assert.equal(post('removeSelectedHRQuestions',{course,token}).ok,false);
+assert.equal(post('removeSelectedHRQuestions',{token}).ok,false);
+const removal=post('removeSelectedHRQuestions',{course:hr,token});assert.equal(removal.ok,true);
+assert.equal(removal.data.removedIds.length,5);assert.equal(removal.data.remainingQuestions,16);
+assert.equal(hrBook.getSheetByName('ArchivedQuestions_20261022').getLastRow(),22);
+assert.deepEqual(removal.data.pageChanges,[{id:'hr_impression',from:6,to:5}]);
+assert.deepEqual(post('adminDashboard',{course:hr,token}).data.questions,hrDash.questions);
+assert.equal(JSON.stringify(hrBook.getSheetByName('Responses').rows),preservedResponses);
+assert.equal(post('adminDashboard',{course:hr,token}).data.activeQuestionId,'');
+assert.equal(post('adminDashboard',{course:hr,token}).data.opened.includes('recruitment_funnel'),false);
+assert.equal(post('display',{course:hr}).data.activeQuestion,null);
+assert.equal(post('adminSetActive',{course:hr,token,questionId:'recruitment_funnel'}).ok,false);
+assert.equal(post('removeSelectedHRQuestions',{course:hr,token}).data.removedIds.length,0);
 post('deleteTestResponses',{course:hr,token});
 assert.equal(post('adminReport',{course:hr,token}).data.answerCount,0);
 assert.equal(post('adminDashboard',{course:hr,token}).data.opened.length,0);
 assert.equal(JSON.stringify(post('adminReport',{course,token}).data.questions),JSON.stringify(JSON.parse(marketSnapshot).questions));
 assert.equal(JSON.stringify(tables),originalSnapshot);
-console.log('PASS: HR 21-question bank, all quiz keys, check-in, newsletter privacy, idempotency, report, reset and three-course isolation.');
+console.log('PASS: HR 16-question bank, recoverable five-question removal, preserved responses, quiz keys, check-in, newsletter privacy, idempotency, report, reset and three-course isolation.');
