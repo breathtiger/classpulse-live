@@ -24,7 +24,7 @@ function doPost(e) {
     if (['state','display','adminDashboard','adminReport'].indexOf(p.api)>=0) flushPending_();
     let data;
     switch (p.api) {
-      case 'ping': data = {version:'hr-20261022'}; break;
+      case 'ping': data = {version:'hr-20261022',loadTestMax:500}; break;
       case 'createMarketCourse': data = createMarketCourse_(p.token); break;
       case 'createHRCourse': data = createHRCourse_(p.token); break;
       case 'login': data = {token:createAdminSession_(p.password)}; break;
@@ -36,7 +36,7 @@ function doPost(e) {
       case 'adminReport': data = getAdminReport(p.token); break;
       case 'startLoadTest': data = startLoadTest_(p.token); break;
       case 'finishLoadTest': data = finishLoadTest_(p.token,p.testToken); break;
-      case 'seedLoadHistory': data = seedLoadHistory_(p.token); break;
+      case 'seedLoadHistory': data = seedLoadHistory_(p.token,p.participants); break;
       case 'adminSetActive': data = adminSetActive(p.token,p.questionId); break;
       case 'adminNavigate': data = adminNavigate(p.token,p.direction); break;
       case 'deleteTestResponses': data = deleteTestResponses(p.token); break;
@@ -361,13 +361,15 @@ function finishLoadTest_(adminKey,token) {
   CacheService.getScriptCache().remove(cacheKey_());
   return {rows:rows.length,duplicates:rows.length-unique.size,report:report,accessRevoked:true};
 }
-function seedLoadHistory_(adminKey) {
+function seedLoadHistory_(adminKey,participants) {
   assertAdmin_(adminKey);
   if(requestNamespace_.indexOf('test_')!==0)throw new Error('不支援的請求。');
+  const count=participants===undefined?50:Number(participants);
+  if(!Number.isInteger(count)||count<1||count>500)throw new Error('測試人數必須是 1 至 500。');
   const questions=getQuestions_(),quiz=questions.find(q=>q.type==='quiz'),text=questions.filter(q=>q.type==='open_text').slice(-1)[0];
   const seen=new Set(responses_().map(r=>r[1]+'|'+r[3])),rows=[];
   questions.filter(q=>q.id!==quiz.id&&q.id!==text.id).forEach(q=>{
-    for(let i=0;i<50;i++){
+    for(let i=0;i<count;i++){
       const pid='load_'+i;if(seen.has(pid+'|'+q.id))continue;
       const answer=q.type==='open_text'?'壓測歷史回答 '+i:q.type==='multiple'?[q.options[0]]:q.options[i%q.options.length];
       const correct=q.type==='quiz'?answersEqual_(answer,q.answer):'';

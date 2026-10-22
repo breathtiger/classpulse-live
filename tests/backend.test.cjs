@@ -211,6 +211,10 @@ assert.equal(post('adminReport',{course:hr,token}).data.answerCount,21,'再次�
 const hrScope=post('startLoadTest',{course:hr,token}).data;
 assert.equal(post('state',{course,testToken:hrScope.testToken}).ok,false);
 assert.equal(post('state',{testToken:hrScope.testToken}).ok,false);
+for(const participants of [0,501,1.5,'bad'])assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants}).ok,false);
+assert.equal(post('seedLoadHistory',{course:hr,token,participants:500}).ok,false,'Never seed formal data');
+assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants:500}).data.seededRows,9500);
+assert.equal(post('seedLoadHistory',{course:hr,token,testToken:hrScope.testToken,participants:500}).data.seededRows,0,'History seed is idempotent');
 assert.equal(post('finishLoadTest',{course:hr,token,testToken:hrScope.testToken}).data.accessRevoked,true);
 post('deleteTestResponses',{course:hr,token});
 assert.equal(post('adminReport',{course:hr,token}).data.answerCount,0);

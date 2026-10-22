@@ -63,6 +63,14 @@ GitHub Pages 發布 `index.html`、`Admin.html`、`Display.html` 與 `assets/`�
 
 `tests/load-test.cjs` 是真實 HTTP 併發測試，從 `CLASSPULSE_ADMIN_KEY` 環境變數讀取密碼，不將密碼寫入程式碼。`startLoadTest` 僅供已驗證講師建立隔離試算表；每次使用一個一小時到期的測試憑證，測試完成立即撤銷。使用同一 Apps Script 部署與同一寫入程式，因此共用實際執行限制，但不更動正式題庫、回答或開題狀態。隔離試算表只含合成壓测資料，可留存稽核。
 
+設定 `CLASSPULSE_COURSE=hr-20261022`、`CLASSPULSE_PARTICIPANTS=500` 可執行 500 人版本（人數限 1–500，預設 50）。例如已在環境中安全設定講師密碼後：
+
+```sh
+CLASSPULSE_COURSE=hr-20261022 CLASSPULSE_PARTICIPANTS=500 node tests/load-test.cjs hr-20261022-500
+```
+
+每波同時發起指定人數的報到、單選送答、讀題、測驗送答、文字送答及重送，沿用正式前端的超時／重試行為；後三波先植入整堂課歷史回答。這是單一測試端的 HTTP 併發模擬，並非 500 部手機或三小時持續負載。延遲包含自動重試；百分位數只計成功請求，失敗請求另列耗時。結果寫入 `outputs/load-test-<label>.json`，不得將 50 人通過或單次 500 人通過當成保證正式尖峰無延遲。測試階段失敗仍會嘗試撤銷隔離憑證，若 `cleanupError` 出現需人工確認清理結果。
+
 以下為 Apps Script 原生模板的初始建置說明；正式課堂請使用上方三個入口，不要重新執行初始化或題庫安裝。
 
 這是單一課程使用的手機優先 Web App；資料保存在 Google Sheets，沒有外部套件或 CDN。
